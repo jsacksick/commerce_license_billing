@@ -1,0 +1,24 @@
+name = Usage
+description = Implement subscription feature.
+package = Commerce (contrib)
+configure = admin/commerce/config/usage
+dependencies[] = bundleswitcher
+dependencies[] = commerce
+dependencies[] = commerce_order
+dependencies[] = commerce_product
+dependencies[] = ctools
+dependencies[] = entity
+dependencies[] = entityreference
+dependencies[] = entity_bundle_plugin
+dependencies[] = rules
+core = 7.x
+
+; Classes includes
+files[] = includes/commerce_usage.billing_cycle_type.inc
+files[] = includes/commerce_usage.billing_cycle_type.controller.inc
+files[] = includes/commerce_usage.billing_cycle_type_ui.inc
+files[] = includes/commerce_usage.billing_cycle.inc
+files[] = includes/commerce_usage.product_usage.inc
+
+; Simple tests
+files[] = tests/commerce_usage.test

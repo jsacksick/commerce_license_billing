@@ -1,0 +1,6 @@
+name = Commerce Usage Test
+description = Test module for Commerce Usage.
+package = Commerce
+core = 7.x
+hidden = TRUE
+dependencies[] = commerce_usage

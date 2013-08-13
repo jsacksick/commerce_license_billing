@@ -1,0 +1,128 @@
+<?php
+/**
+ * Implements hook_schema().
+ */
+function commerce_usage_schema() {
+  $schema['commerce_usage_cycle'] = array(
+    'description' => 'The base table for billing cycle.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'The primary identifier for a billing cycle.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'title' => array(
+        'description' => 'The human-readable name of the billing cycle.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'type' => array(
+        'description' => 'The {commerce_usage_cycle_type}.name of this billing cycle.',
+        'type'        => 'varchar',
+        'length'      => 32,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'status' => array(
+        'description' => 'Boolean value define whether billing cycle is open or closed.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'expire' => array(
+        'description' => 'The Unix timestamp when the usage cycle expires.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+  );
+  $schema['commerce_usage_cycle_type'] = array(
+    'description' => 'Define billing cycle type.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'The primary identifier for a billing cycle type.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'name' => array(
+        'description' => 'The machine-readable name of this billing cycle type.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'title' => array(
+        'description' => 'The human-readable name of the billing cycle type.',
+        'type'        => 'varchar',
+        'length'      => 32,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'engine' => array(
+        'description' => 'The engine for this billing cycle type.',
+        'type'        => 'varchar',
+        'length'      => 32,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'status' => array(
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 1,
+      ),
+      'module' => array(
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+    ),
+    'unique keys' => array(
+      'name' => array('name'),
+    ),
+    'primary key' => array('id'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function commerce_usage_install() {
+  variable_set('bundleswitcher__commerce_usage_cycle_type', TRUE);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function commerce_usage_uninstall() {
+  variable_del('commerce_usage_order_types');
+  variable_del('bundleswitcher__commerce_usage_cycle_type');
+  // Delete line item field instances.
+  foreach (commerce_product_line_item_types() as $line_item_type) {
+    if ($instance = field_info_instance('commerce_line_item', 'usage_active', $line_item_type)) {
+      field_delete_instance($instance);
+    }
+  }
+  // Remove field instances on the order bundles.
+  $entity_info = entity_get_info('commerce_order');
+  foreach ($entity_info['bundles'] as $bundle_key => $bundle) {
+    if ($instance = field_info_instance('commerce_order', 'usage_billing_cycle', $bundle_key)) {
+      field_delete_instance($instance);
+    }
+  }
+  // Remove field instances on the product bundles.
+  foreach (commerce_product_types() as $type_name => $product_type) {
+    if ($instance = field_info_instance('commerce_product', 'usage_billing_cycle_type', $product_type)) {
+      field_delete_instance($instance);
+    }
+    if ($instance = field_info_instance('commerce_product', 'usage_payment_type', $product_type)) {
+      field_delete_instance($instance);
+    }
+  }
+}

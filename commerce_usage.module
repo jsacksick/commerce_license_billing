@@ -1,0 +1,619 @@
+<?php
+
+// Recurring open order status.
+define('COMMERCE_USAGE_RECURRING_OPEN', 'recurring_open');
+
+// Recurring complete order status.
+define('COMMERCE_USAGE_RECURRING_COMPLETE', 'recurring_complete');
+
+/**
+ * Implements hook_menu().
+ */
+function commerce_usage_menu() {
+  // Access is inherited.
+  $items['admin/commerce/config/usage/order-settings'] = array(
+    'title' => 'Order settings',
+    'file' => 'includes/commerce_usage.admin.inc',
+    'page callback' => 'drupal_get_form',
+    'access arguments' => array('administer store'),
+    'page arguments' => array('commerce_usage_order_settings_form'),
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function commerce_usage_cron() {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'commerce_usage_cycle')
+    ->propertyCondition('status', 1)
+    ->propertyCondition('expire', REQUEST_TIME, '<');
+  $results = $query->execute();
+  if (!empty($results['commerce_usage_cycle'])) {
+    foreach (array_keys($results['commerce_usage_cycle']) as $billing_cycle_id) {
+      $queue = DrupalQueue::get('commerce_usage_close_billing_cycle');
+      $task = array(
+        'id' => $billing_cycle_id,
+      );
+      $queue->createItem($task);
+    }
+  }
+}
+
+/**
+ * Implements hook_advanced_queue_info().
+ */
+function commerce_usage_advanced_queue_info() {
+  return array(
+    'commerce_usage_close_billing_cycle' => array(
+      'worker callback' => 'commerce_usage_close_billing_cycle',
+    ),
+  );
+}
+
+/**
+ * Advanced queue worker callback.
+ */
+function commerce_usage_close_billing_cycle($item) {
+  $billing_cycle = entity_load_single('commerce_usage_cycle', $item->data['id']);
+  $billing_cycle->status = 0;
+  entity_save('commerce_usage_cycle', $billing_cycle);
+  return array(
+    'status' => ADVANCEDQUEUE_STATUS_SUCCESS,
+    'result' => 'Processed Billing cycle' . $item->data['id'],
+  );
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function commerce_usage_entity_info() {
+  $entity_info['commerce_usage_cycle'] = array(
+    'label' => t('Commerce Usage billing cycle'),
+    'module' => 'commerce_usage',
+    'base table' => 'commerce_usage_cycle',
+    'entity class' => 'CommerceUsageBillingCycle',
+    'controller class' => 'EntityAPIController',
+    'fieldable' => FALSE,
+    'bundles' => array(),
+    'bundle keys' => array(
+      'bundle' => 'name',
+    ),
+    'entity keys' => array(
+      'id' => 'id',
+      'bundle' => 'type',
+      'label' => 'title',
+    ),
+  );
+
+  // Billing cycle entity bundle.
+  $billing_cycle_type = db_select('commerce_usage_cycle_type', 'bc')
+    ->fields('bc', array('name', 'title'))
+    ->execute()
+    ->fetchAllKeyed();
+  foreach ($billing_cycle_type as $name => $title) {
+    $entity_info['commerce_usage_cycle']['bundles'][$name] = array(
+      'label' => $title,
+    );
+  }
+
+  $entity_info['commerce_usage_cycle_type'] = array(
+    'label' => t('Commerce Usage billing cycle type'),
+    'module' => 'commerce_usage',
+    'base table' => 'commerce_usage_cycle_type',
+    'access callback' => 'commerce_usage_cycle_type_access',
+    'entity class' => 'CommerceUsageBillingCycleTypeAbstract',
+    'controller class' => 'CommerceUsageBillingCycleTypeController',
+    'fieldable' => TRUE,
+    'exportable' => TRUE,
+    'bundles' => array(),
+    'bundle of' => 'commerce_usage_cycle',
+    'bundle plugin' => array(
+      'plugin type' => 'billing_cycle_engine',
+    ),
+    'entity keys' => array(
+      'id' => 'id',
+      'label' => 'title',
+      'name' => 'name',
+      'bundle' => 'engine',
+    ),
+    'admin ui' => array(
+      'path' => 'admin/commerce/config/usage',
+      'file' => 'includes/commerce_usage.billing_cycle_type_ui.inc',
+      'controller class' => 'CommerceUsageBillingCycleTypeUIController',
+    ),
+  );
+
+  // Billing cycle type entity bundle.
+  foreach (commerce_usage_cycle_engine_plugins() as $name => $plugin) {
+    $entity_info['commerce_usage_cycle_type']['bundles'][$name] = array(
+      'label' => $plugin['title'],
+    );
+  }
+
+  return $entity_info;
+}
+
+/**
+ * Access callback for the entity API.
+ *
+ * @param $op
+ *   The operation being performed. One of 'view', 'update', 'create', 'delete'
+ *   or just 'edit' (being the same as 'create' or 'update').
+ * @param $cycle_type
+ *   (optional) A cycle type to check access for. If nothing is given, access
+ *   for all cycle types is determined.
+ * @param $account
+ *   (optional) The user to check for. Leave it to NULL to check for the global
+ *   user.
+ *
+ * @return boolean
+ *   Whether access is allowed or not.
+ */
+function commerce_usage_cycle_type_access($op, $cycle_type = NULL, $account = NULL) {
+  $engines = commerce_usage_cycle_engine_plugins();
+  return user_access('administer store', $account) && !empty($engines);
+}
+
+/**
+ * Test unicity of the machine name.
+ */
+function commerce_usage_name_exists($machine_name) {
+  $efq = new EntityFieldQuery();
+  $ids = $efq->entityCondition('entity_type', 'commerce_usage_cycle_type')
+    ->propertyCondition('name', $machine_name)
+    ->execute();
+  return $ids;
+}
+
+/**
+ * Implements hook_commerce_order_state_info().
+ */
+function commerce_usage_commerce_order_state_info() {
+  $order_states['recurring'] = array(
+    'name' => 'recurring',
+    'title' => t('Recurring order'),
+    'description' => t('Regroup the recurring orders statuses.'),
+    'weight' => 10,
+    'default_status' => COMMERCE_USAGE_RECURRING_OPEN,
+  );
+  return $order_states;
+}
+
+/**
+ * Implements hook_commerce_order_status_info().
+ */
+function commerce_usage_commerce_order_status_info() {
+  $order_statuses[COMMERCE_USAGE_RECURRING_OPEN] = array(
+    'name' => COMMERCE_USAGE_RECURRING_OPEN,
+    'title' => t('Recurring open'),
+    'state' => 'recurring',
+  );
+  $order_statuses[COMMERCE_USAGE_RECURRING_COMPLETE] = array(
+    'name' => COMMERCE_USAGE_RECURRING_COMPLETE,
+    'title' => t('Recurring complete'),
+    'state' => 'recurring',
+  );
+  return $order_statuses;
+}
+
+/**
+ * Implements hook_ctools_plugin_type().
+ */
+function commerce_usage_ctools_plugin_type() {
+  $plugins['billing_cycle_engine'] = array(
+    'classes' => array('class'),
+  );
+
+  $plugins['product_usage'] = array(
+    'classes' => array('class'),
+  );
+  return $plugins;
+}
+
+/**
+ * Get the available billing cycle engines.
+ */
+function commerce_usage_cycle_engine_plugins() {
+  ctools_include('plugins');
+  $billing_cycle_engines = ctools_get_plugins('commerce_usage', 'billing_cycle_engine');
+  uasort($billing_cycle_engines, 'ctools_plugin_sort');
+  return $billing_cycle_engines;
+}
+
+/**
+ * Get the available product usage plugins.
+ */
+function commerce_usage_product_usage_plugins() {
+  ctools_include('plugins');
+  $products = ctools_get_plugins('commerce_usage', 'product_usage');
+  uasort($products, 'ctools_plugin_sort');
+  return $products;
+}
+
+/**
+ * Return a plugin object.
+ *
+ * @param $product_type
+ *   The machine-readable name of the product type.
+ *
+ * @return array
+ *   An instance of the class defined in the product type plugin or FALSE if it fail.
+ */
+function commerce_usage_get_usage_plugin($type) {
+  $plugin = &drupal_static(__FUNCTION__);
+
+  if (!isset($plugin[$type])) {
+    $product_type = commerce_product_type_load($type);
+    if (isset($product_type['usage']['plugin']['class']) && $class = $product_type['usage']['plugin']['class']) {
+      $plugin[$type] = new $class();
+    }
+  }
+
+  return $plugin[$type] ? $plugin[$type] : FALSE;
+}
+
+/**
+ * Helper function used to retrieve usage based order types.
+ */
+function commerce_usage_get_order_types() {
+  $usage_based_bundles = &drupal_static(__FUNCTION__, array());
+  if (empty($usage_based_bundles)) {
+    $usage_order_types = array_filter(variable_get('commerce_usage_order_types', array()));
+    $usage_based_bundles = array_intersect_key($usage_order_types, commerce_order_type_options_list());
+  }
+  return $usage_based_bundles;
+}
+
+/**
+ * Helper function used to retrieve usage based product types.
+ */
+function commerce_usage_get_product_types() {
+  $usage_based_bundles = &drupal_static(__FUNCTION__, array());
+  if (empty($usage_based_bundles)) {
+    foreach (commerce_product_types() as $type_name => $type) {
+      if (!empty($type['usage']['enabled'])) {
+        $usage_based_bundles[$type_name] = $type_name;
+      }
+    }
+  }
+  return $usage_based_bundles;
+}
+
+/**
+ * Maintain usage_based order type fields.
+ */
+function commerce_usage_order_bundle_rebuild() {
+  $usage_order_types = commerce_usage_get_order_types();
+  if (!empty($usage_order_types)) {
+    $field = field_info_field('usage_billing_cycle');
+    if (empty($field)) {
+      // Create an entity reference field to commerce_billing_cycle.
+      $field = array(
+        'field_name' => 'usage_billing_cycle',
+        'type' => 'entityreference',
+        'entity_type' => 'commerce_order',
+        'cardinality' => 1,
+        'translatable' => 0,
+        'module' => 'entityreference',
+        'settings' => array(
+          'target_type' => 'commerce_usage_cycle',
+        ),
+      );
+      field_create_field($field);
+    }
+    foreach ($usage_order_types as $bundle) {
+      commerce_order_configure_order_type($bundle);
+      $instance = field_info_instance('commerce_order', 'usage_billing_cycle', $bundle);
+      if (empty($instance)) {
+        $instance = array(
+          'field_name' => 'usage_billing_cycle',
+          'entity_type' => 'commerce_order',
+          'bundle' => $bundle,
+          'label' => 'Usage billing cycle',
+          'required' => TRUE,
+          'widget' => array(
+            'type' => 'options_select',
+            'module' => 'options',
+          ),
+        );
+        field_create_instance($instance);
+      }
+    }
+  }
+}
+
+/**
+ * Maintain commerce_line_item usage based fields.
+ */
+function commerce_usage_line_item_bundle_rebuild() {
+  // If we've at least one usaged based order type.
+  $usage_order_types = commerce_usage_get_order_types();
+  if (!empty($usage_order_types)) {
+    $field = field_info_field('usage_active');
+    if (empty($field)) {
+      $field = array(
+        'field_name' => 'usage_active',
+        'type' => 'list_boolean',
+        'entity_type' => 'commerce_line_item',
+        'cardinality' => 1,
+        'translatable' => 0,
+        'module' => 'list',
+        'settings' => array(
+          // No t() is necessary here. Translation is handled by i18n_field.
+          'allowed_values' => array('0' => 'Closed', '1' => 'Open'),
+        ),
+      );
+      field_create_field($field);
+    }
+    foreach (commerce_product_line_item_types() as $line_item_type) {
+      commerce_line_item_configure_line_item_type($line_item_type);
+      $instance = field_info_instance('commerce_line_item', 'usage_active', $line_item_type);
+      if (empty($instance)) {
+        $instance = array(
+          'field_name' => 'usage_active',
+          'entity_type' => 'commerce_line_item',
+          'bundle' => $line_item_type,
+          'label' => 'Usage active',
+          'required' => TRUE,
+          'default_value' => array('1'),
+          'widget' => array(
+            'type' => 'options_onoff',
+            'module' => 'options',
+          ),
+        );
+        field_create_instance($instance);
+      }
+    }
+  }
+}
+
+/**
+ * Maintain commerce_product fields.
+ */
+function commerce_usage_product_usage_rebuild() {
+  $field = field_info_field('usage_billing_cycle_type');
+  if (empty($field)) {
+    $field = array(
+      'field_name' => 'usage_billing_cycle_type',
+      'type' => 'entityreference',
+      'entity_type' => 'commerce_product',
+      'cardinality' => 1,
+      'translatable' => 0,
+      'module' => 'entityreference',
+      'settings' => array(
+        'target_type' => 'commerce_usage_cycle_type',
+      ),
+    );
+    field_create_field($field);
+  }
+
+  $field = field_info_field('usage_payment_type');
+  if (empty($field)) {
+    $field = array(
+      'field_name' => 'usage_payment_type',
+      'type' => 'list_text',
+      'entity_type' => 'commerce_product',
+      'cardinality' => 1,
+      'translatable' => 0,
+      'module' => 'list',
+      'settings' => array(
+        // No t() is necessary here. Translation is handled by i18n_field.
+        'allowed_values' => array('pre_payment' => 'Pre payment', 'post_payment' => 'Post payment'),
+      ),
+    );
+    field_create_field($field);
+  }
+  foreach (commerce_product_types() as $type_name => $product_type) {
+    $is_usage = isset($product_type['usage']['enabled']) ? $product_type['usage']['enabled'] : FALSE;
+
+    $field_instances['usage_billing_cycle_type'] = array(
+      'field_name' => 'usage_billing_cycle_type',
+      'entity_type' => 'commerce_product',
+      'bundle' => $type_name,
+      'label' => 'Usage billing cycle type',
+      'required' => TRUE,
+      'widget' => array(
+        'type' => 'options_select',
+        'module' => 'options',
+      ),
+    );
+    $field_instances['usage_payment_type'] = array(
+      'field_name' => 'usage_payment_type',
+      'entity_type' => 'commerce_product',
+      'bundle' => $type_name,
+      'label' => 'Usage payment type',
+      'required' => TRUE,
+      'widget' => array(
+        'type' => 'options_select',
+        'module' => 'options',
+      ),
+    );
+
+    foreach ($field_instances as $field_name => $field_instance) {
+      $instance = field_info_instance('commerce_product', $field_name, $type_name);
+      if ($is_usage && empty($instance)) {
+        field_create_instance($field_instance);
+      }
+      else {
+        if (!$is_usage && !empty($instance)) {
+          field_delete_instance($field_instance, FALSE);
+        }
+      }
+    }
+  }
+}
+
+
+/**
+ * Implements hook_flush_caches().
+ */
+function commerce_usage_flush_caches() {
+  commerce_usage_order_bundle_rebuild();
+  commerce_usage_line_item_bundle_rebuild();
+  commerce_usage_product_usage_rebuild();
+}
+
+/**
+ * Create a recurring order foreach billing cycle based on a completed order.
+ *
+ * @param order
+ *   The order to use as a base of the new recurring order.
+ */
+function commerce_usage_create_recurring_order($order) {
+  $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+  $product_types = commerce_usage_get_product_types();
+  $billing_cycles = array();
+  foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
+    $product_wrapper = $line_item_wrapper->commerce_product;
+    if (isset($product_types[$product_wrapper->type->value()])) {
+      $billing_cycle_type = $product_wrapper->usage_billing_cycle_type->value();
+      $billing_cycle = $billing_cycle_type->getBillingCycle();
+      $line_item = $line_item_wrapper->value();
+      $new_line_item = clone $line_item;
+      // Nullify the ID and created to be sure we create a new entity.
+      $new_line_item->line_item_id = NULL;
+      $new_line_item->created = NULL;
+      $new_line_item->usage_active[LANGUAGE_NONE][0]['value'] = 1;
+      commerce_line_item_save($new_line_item);
+      $billing_cycles[$billing_cycle->id][] = $new_line_item;
+    }
+  }
+  // Create a recurring order foreach billing cycle.
+  foreach ($billing_cycles as $billing_cycle_id => $line_items) {
+    // Check if there's an existing order attached to that billing cycle.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'commerce_order')
+      ->entityCondition('bundle', $order->type)
+      ->propertyCondition('status', COMMERCE_USAGE_RECURRING_OPEN)
+      ->fieldCondition('usage_billing_cycle', 'target_id', $billing_cycle_id)
+      ->propertyCondition('uid', $order->uid);
+    $results = $query->execute();
+    if (!empty($results['commerce_order'])) {
+      $order_id = key($results['commerce_order']);
+      $recurring_order = entity_metadata_wrapper('commerce_order', $order_id);
+      $recurring_order->commerce_line_items = array_merge($recurring_order->commerce_line_items->value(), $line_items);
+      $recurring_order->save();
+    }
+    else {
+      $recurring_order = commerce_order_new($order->uid, COMMERCE_USAGE_RECURRING_OPEN, $order->type);
+      $order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+      $order_wrapper->usage_billing_cycle = $billing_cycle_id;
+      $order_wrapper->commerce_line_items = $line_items;
+      $order_wrapper->save();
+    }
+  }
+}
+
+/**
+ * Implements hook_commerce_order_load().
+ *
+ * Update usage_base line_item quantity on order load.
+ */
+function commerce_usage_commerce_order_load($orders) {
+  foreach ($orders as $order) {
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+    if (isset($usage_order_types[$order->type]) && $order->status == COMMERCE_USAGE_RECURRING_OPEN) {
+      foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
+        if ($line_item_wrapper->usage_active->value() == '1') {
+          $plugin = commerce_usage_get_usage_plugin($line_item_wrapper->commerce_product->type->value());
+          $product_type = commerce_product_type_load($line_item_wrapper->commerce_product->type->value());
+          $line_item_wrapper->quantity = $plugin->getUsage($line_item_wrapper->commerce_product->value(), user_load($order_wrapper->uid->value()));
+          $line_item_wrapper->save();
+        }
+      }
+      commerce_order_calculate_total($order);
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+function commerce_usage_entity_update($entity, $type) {
+  // React when a billing cycle is closed.
+  if ($type == 'commerce_usage_cycle' && $entity->status == 0) {
+    commerce_usage_cycle_update($entity);
+  }
+}
+
+/**
+ * Performs actions to complete a billing cycle.
+ *
+ * Close all orders attached to the billing cycle.
+ * Open new orders attached to next billing cycle for still active subscriptions.
+ *
+ * @param $billing_cycle
+ *   The billing cycle object to complete.
+ */
+function commerce_usage_cycle_update($billing_cycle) {
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'commerce_usage_cycle_type')
+    ->propertyCondition('name', $billing_cycle->type);
+  $result = $query->execute();
+  // Check if the billing cycle type still exists.
+  if (empty($result['commerce_usage_cycle_type'])) {
+    return FALSE;
+  }
+  $billing_cycle_type = entity_load_single('commerce_usage_cycle_type', key($result['commerce_usage_cycle_type']));
+  // Get all orders attached to the billing cycle.
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'commerce_order')
+    ->propertyCondition('status', COMMERCE_USAGE_RECURRING_OPEN)
+    ->fieldCondition('usage_billing_cycle', 'target_id', $billing_cycle->id);
+  $result = $query->execute();
+
+  if (!empty($result['commerce_order'])) {
+    $orders = entity_load('commerce_order', array_keys($result['commerce_order']));
+    foreach ($orders as $order) {
+      $line_items = array();
+      $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+      // Keep active line items from old order.
+      foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
+        $product = $line_item_wrapper->commerce_product->value();
+        if ($line_item_wrapper->usage_active->value() != '1' || !$usage_plugin = commerce_usage_get_usage_plugin($product->type)) {
+          continue;
+        }
+        $line_item = $line_item_wrapper->value();
+        $new_line_item = clone $line_item;
+        // Nullify the ID and created to be sure we create a new entity.
+        $new_line_item->line_item_id = NULL;
+        $new_line_item->created = NULL;
+        if ($line_item_wrapper->commerce_product->usage_payment_type->value() == 'pre_payment') {
+          $new_line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $new_line_item);
+          $new_line_item_wrapper->quantity->set($usage_plugin->getNextUsage($product, $order_wrapper->owner->value()));
+        }
+        commerce_line_item_save($new_line_item);
+        $line_items[] = $new_line_item;
+      }
+
+      // Close old order.
+      $order_wrapper->status->set(COMMERCE_USAGE_RECURRING_COMPLETE);
+      commerce_order_save($order);
+
+      // If there is still active line items create new order
+      // attached to next billing cycle.
+      if (!empty($line_items)) {
+        $order = commerce_order_new($order->uid, COMMERCE_USAGE_RECURRING_OPEN, $order->type);
+        $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+        $order_wrapper->usage_billing_cycle = $billing_cycle_type->getBillingCycle($billing_cycle);
+        $order_wrapper->commerce_line_items = $line_items;
+        commerce_order_save($order);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function commerce_usage_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'commerce_usage') {
+    return 'plugins/' . $plugin;
+  }
+}

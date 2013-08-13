@@ -1,0 +1,193 @@
+<?php
+
+/**
+ * Basic subscription-type tests for the Commerce Usage framework.
+ */
+class CommerceUsageBasicTest extends CommerceBaseTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Commerce Usage Subscription',
+      'description' => 'Test Commerce Usage in simple subscription-type cases.',
+      'group' => 'Commerce Usage'
+    );
+  }
+
+  protected function setUp() {
+    $modules = parent::setUpHelper('all');
+    $modules[] = 'commerce_usage_test';
+    parent::setUp($modules);
+
+    // Create the billing cycle type.
+    $this->billingCycleType = entity_create('commerce_usage_cycle_type', array('engine' => 'test', 'name' => 'test'));
+    $this->billingCycleType->save();
+
+    // Create a test user.
+    $this->clientUser = $this->drupalCreateUser();
+    $this->drupalLogin($this->clientUser);
+  }
+
+  protected function createUsageBaseProduct($sku, $amount, $currency, $billing_cycle_type, $payment_type = 'post_payment') {
+    $product = commerce_product_new('usage_test');
+    $product->sku = $sku;
+    $product->title = 'Subscription product';
+    $product->uid = 1;
+    $product->commerce_price[LANGUAGE_NONE][0]['amount'] = $amount;
+    $product->commerce_price[LANGUAGE_NONE][0]['currency_code'] = $currency;
+    $product->usage_billing_cycle_type[LANGUAGE_NONE][0]['target_id'] = $billing_cycle_type->id;
+    $product->usage_payment_type[LANGUAGE_NONE][0]['value'] = $payment_type;
+    commerce_product_save($product);
+    return $product;
+  }
+
+  protected function assertUsageBasedOrder($order, $expected) {
+    // Always re-load the order from cache.
+
+    $order = entity_load('commerce_order', array($order->order_id), array(), TRUE);
+    $order = reset($order);
+
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+
+    // Check the billing cycle attached to the order.
+    $billing_cycle = $order_wrapper->usage_billing_cycle->value();
+    $this->assertTrue($billing_cycle instanceof CommerceUsageBillingCycle, t('Billing cycle is a CommerceUsageBillingCycle.'));
+    $this->assertEqual($billing_cycle->type, $expected['billing_cycle_type']->name, t('Order is attached to a billing cycle of the proper type.'));
+    $this->assertEqual($billing_cycle->status, $expected['billing_cycle_status'], t('The billing cycle is open.'));
+
+    // Check the order total.
+    $order_total = $order_wrapper->commerce_order_total->value();
+    $this->assertEqual($order_total['amount'], $expected['total'], t('Order total is correct.'));
+  }
+
+  protected function assertNewUsageBasedOrder($order, $old_order) {
+    $this->assertNotEqual($order->order_id, $old_order->order_id, 'The user has a new order.');
+    $old_billing_cycle = $this->getBillingCycleFromOrder($old_order);
+    $new_billing_cycle = $this->getBillingCycleFromOrder($order);
+    $this->assertNotEqual($new_billing_cycle->id, $old_billing_cycle->id, 'The new order is attached to a new billing cycle.');
+  }
+
+  protected function getBillingCycleFromOrder($order) {
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+    return $order_wrapper->usage_billing_cycle->value();
+  }
+
+  /**
+   * Indirectly set the product usage for products using the test usage plugin.
+   *
+   * Note that by default, the usage reported by the test usage plugin is going
+   * to always be "1".
+   */
+  protected function setProductUsage($product, $usage, $account = NULL) {
+    $plugin = commerce_usage_get_usage_plugin($product->type);
+    $plugin->setUsage($product, $usage, $account);
+  }
+
+  protected function testPostPayment() {
+    // Create a subscription-based product.
+    $product = $this->createUsageBaseProduct('USAGE', 10, 'USD', $this->billingCycleType, 'post_payment');
+
+    // Subscribe the user to the product, it will start a billing cycle.
+    commerce_usage_create_subscription($product, $this->clientUser);
+
+    // Assert the status of the created order.
+    $order = commerce_usage_get_active_order($product, $this->clientUser);
+
+    $this->assertUsageBasedOrder($order, array(
+      'billing_cycle_type' => $this->billingCycleType,
+      'billing_cycle_status' => 1,
+      'total' => 10,
+      'products' => array($product),
+    ));
+
+    // Now close the billing cycle.
+    $billing_cycle = $this->getBillingCycleFromOrder($order);
+    $billing_cycle->status = 0;
+    $billing_cycle->save();
+
+    // Assert the status of the created order.
+    $this->assertUsageBasedOrder($order, array(
+      'billing_cycle_type' => $this->billingCycleType,
+      'billing_cycle_status' => 0,
+      'total' => 10,
+      'products' => array($product),
+    ));
+
+    // The user should have a new open order.
+    $new_order = commerce_usage_get_active_order($product, $this->clientUser);
+    $this->assertNewUsageBasedOrder($new_order, $order);
+    $this->assertUsageBasedOrder($new_order, array(
+      'billing_cycle_type' => $this->billingCycleType,
+      'billing_cycle_status' => 1,
+      'total' => 10,
+      'products' => array($product),
+    ));
+
+    // Now close the billing cycle.
+    $new_billing_cycle = $this->getBillingCycleFromOrder($new_order);
+    $new_billing_cycle->status = 0;
+    $new_billing_cycle->save();
+
+    // Assert the status of the created order.
+    $this->assertUsageBasedOrder($new_order, array(
+      'billing_cycle_type' => $this->billingCycleType,
+      'billing_cycle_status' => 0,
+      'total' => 10,
+      'products' => array($product),
+    ));
+  }
+
+  protected function testPostPaymentPartial() {
+    // Create a subscription-based product.
+    $product = $this->createUsageBaseProduct('USAGE', 10, 'USD', $this->billingCycleType, 'post_payment');
+
+    // Subscribe the user to the product, it will start a billing cycle.
+    commerce_usage_create_subscription($product, $this->clientUser);
+
+    // Set partial usage.
+    $this->setProductUsage($product, 0.25, $this->clientUser);
+
+    // Assert the status of the created order.
+    $order = commerce_usage_get_active_order($product, $this->clientUser);
+    $this->assertUsageBasedOrder($order, array(
+      'billing_cycle_type' => $this->billingCycleType,
+      'billing_cycle_status' => 1,
+      'total' => 2.5,
+      'products' => array($product),
+    ));
+
+    // Now close the billing cycle.
+    $billing_cycle = $this->getBillingCycleFromOrder($order);
+    $billing_cycle->status = 0;
+    $billing_cycle->save();
+
+    // Assert the status of the created order.
+    $this->assertUsageBasedOrder($order, array(
+      'billing_cycle_type' => $this->billingCycleType,
+      'billing_cycle_status' => 0,
+      'total' => 2.5,
+      'products' => array($product),
+    ));
+
+    // The user should have a new open order, with a full usage again.
+    $new_order = commerce_usage_get_active_order($product, $this->clientUser);
+    $this->assertNewUsageBasedOrder($new_order, $order);
+    $this->assertUsageBasedOrder($new_order, array(
+      'billing_cycle_type' => $this->billingCycleType,
+      'billing_cycle_status' => 1,
+      'total' => 10,
+      'products' => array($product),
+    ));
+
+    // Now close the billing cycle.
+    $new_billing_cycle = $this->getBillingCycleFromOrder($new_order);
+    $new_billing_cycle->status = 0;
+    $new_billing_cycle->save();
+
+    // Assert the status of the created order.
+    $this->assertUsageBasedOrder($new_order, array(
+      'billing_cycle_type' => $this->billingCycleType,
+      'billing_cycle_status' => 0,
+      'total' => 10,
+      'products' => array($product),
+    ));
+  }
+}
