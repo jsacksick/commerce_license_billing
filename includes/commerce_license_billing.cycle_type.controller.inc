@@ -4,7 +4,7 @@
  * EntityAPI Controller for the Billing Cycle type entity.
  */
 
-class CommerceUsageBillingCycleTypeController extends EntityBundlePluginEntityControllerExportable {
+class CommerceLicenseBillingCycleTypeController extends EntityBundlePluginEntityControllerExportable {
 
   /**
    * Create a default Billing Cycle Type entity.
@@ -21,7 +21,7 @@ class CommerceUsageBillingCycleTypeController extends EntityBundlePluginEntityCo
       'name' => '',
       'status' => ENTITY_IN_DB,
     );
-    if (!isset($values['engine']) && $engines = commerce_usage_cycle_engine_plugins()) {
+    if (!isset($values['engine']) && $engines = commerce_license_billing_cycle_engine_plugins()) {
       $values['engine'] = key($engines);
     }
     return parent::create($values);

@@ -2,8 +2,8 @@
 /**
  * Implements hook_schema().
  */
-function commerce_usage_schema() {
-  $schema['commerce_usage_cycle'] = array(
+function commerce_license_billing_schema() {
+  $schema['commerce_license_billing_cycle'] = array(
     'description' => 'The base table for billing cycle.',
     'fields' => array(
       'id' => array(
@@ -20,7 +20,7 @@ function commerce_usage_schema() {
         'default'     => '',
       ),
       'type' => array(
-        'description' => 'The {commerce_usage_cycle_type}.name of this billing cycle.',
+        'description' => 'The {commerce_license_billing_cycle_type}.name of this billing cycle.',
         'type'        => 'varchar',
         'length'      => 32,
         'not null'    => TRUE,
@@ -41,7 +41,7 @@ function commerce_usage_schema() {
     ),
     'primary key' => array('id'),
   );
-  $schema['commerce_usage_cycle_type'] = array(
+  $schema['commerce_license_billing_cycle_type'] = array(
     'description' => 'Define billing cycle type.',
     'fields' => array(
       'id' => array(
@@ -93,36 +93,23 @@ function commerce_usage_schema() {
 /**
  * Implements hook_install().
  */
-function commerce_usage_install() {
-  variable_set('bundleswitcher__commerce_usage_cycle_type', TRUE);
+function commerce_license_billing_install() {
+  variable_set('bundleswitcher__commerce_license_billing_cycle_type', TRUE);
 }
 
 /**
  * Implements hook_uninstall().
  */
-function commerce_usage_uninstall() {
-  variable_del('commerce_usage_order_types');
-  variable_del('bundleswitcher__commerce_usage_cycle_type');
-  // Delete line item field instances.
-  foreach (commerce_product_line_item_types() as $line_item_type) {
-    if ($instance = field_info_instance('commerce_line_item', 'usage_active', $line_item_type)) {
-      field_delete_instance($instance);
-    }
-  }
-  // Remove field instances on the order bundles.
-  $entity_info = entity_get_info('commerce_order');
-  foreach ($entity_info['bundles'] as $bundle_key => $bundle) {
-    if ($instance = field_info_instance('commerce_order', 'usage_billing_cycle', $bundle_key)) {
-      field_delete_instance($instance);
-    }
-  }
-  // Remove field instances on the product bundles.
-  foreach (commerce_product_types() as $type_name => $product_type) {
-    if ($instance = field_info_instance('commerce_product', 'usage_billing_cycle_type', $product_type)) {
-      field_delete_instance($instance);
-    }
-    if ($instance = field_info_instance('commerce_product', 'usage_payment_type', $product_type)) {
-      field_delete_instance($instance);
+function commerce_license_billing_uninstall() {
+  variable_del('bundleswitcher__commerce_license_billing_cycle_type');
+  $fields = array(
+    'commerce_license_billing_cycle',
+    'commerce_license_billing_cycle_type',
+    'commerce_license_billing_payment_type',
+  );
+  foreach ($fields as $field_name) {
+    if (field_info_field($field_name)) {
+      field_delete_field($field_name);
     }
   }
 }

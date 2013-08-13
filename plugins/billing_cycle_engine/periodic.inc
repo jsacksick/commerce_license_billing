@@ -1,5 +1,5 @@
 <?php
 $plugin = array(
   'title' => t('Periodic'),
-  'class' => 'CommerceUsagePluginsPeriodic',
+  'class' => 'CommerceLicenseBillingPeriodicCycleType',
 );

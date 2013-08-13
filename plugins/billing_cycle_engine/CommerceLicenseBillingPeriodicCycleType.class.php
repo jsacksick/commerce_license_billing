@@ -3,7 +3,7 @@
 /**
  * A perodic billing cycle engine API.
  */
-class CommerceUsagePluginsPeriodic extends CommerceUsageBillingCycleTypeAbstract implements EntityBundlePluginProvideFieldsInterface {
+class CommerceLicenseBillingPeriodicCycleType extends CommerceLicenseBillingCycleTypeAbstract implements EntityBundlePluginProvideFieldsInterface {
 
   /**
    * Implements EntityBundlePluginProvideFieldsInterface::fields().
@@ -62,7 +62,7 @@ class CommerceUsagePluginsPeriodic extends CommerceUsageBillingCycleTypeAbstract
   /**
    * Handle async billing cycle for now. Todo: sync billing cycle.
    */
-  public function getBillingCycle(CommerceUsageBillingCycle $old_billing_cycle = NULL) {
+  public function getBillingCycle(CommerceLicenseBillingCycle $old_billing_cycle = NULL) {
     $request_time = REQUEST_TIME;
     $periodicity_mapping = array(
       'daily' => '+ 1 day',
@@ -72,7 +72,7 @@ class CommerceUsagePluginsPeriodic extends CommerceUsageBillingCycleTypeAbstract
       'yearly' => '+ 1 year',
     );
     $expire = strtotime($periodicity_mapping[$this->wrapper->cu_periodic_periodicity->value()], $request_time);
-    $existing_cycle = entity_load('commerce_usage_cycle', FALSE, array('type' => $this->{$this->nameKey}, 'expire' => $expire));
+    $existing_cycle = entity_load('commerce_license_billing_cycle', FALSE, array('type' => $this->{$this->nameKey}, 'expire' => $expire));
     if ($existing_cycle) {
       // Return the existing cycle.
       return reset($existing_cycle);
@@ -85,7 +85,7 @@ class CommerceUsagePluginsPeriodic extends CommerceUsageBillingCycleTypeAbstract
         }
         $title = format_date($expire, 'short') . ' - ' . ucfirst($this->wrapper->cu_periodic_periodicity->value());
         // Else, create a new one.
-        $billing_cycle = entity_create('commerce_usage_cycle', array(
+        $billing_cycle = entity_create('commerce_license_billing_cycle', array(
           'type' => $this->{$this->nameKey},
           'title' => $title,
           'status' => 1,

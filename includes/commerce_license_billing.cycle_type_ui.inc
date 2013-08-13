@@ -7,14 +7,14 @@
 /**
  * UI controller.
  */
-class CommerceUsageBillingCycleTypeUIController extends EntityDefaultUIController {
+class CommerceLicenseBillingCycleTypeUIController extends EntityDefaultUIController {
 
 }
 
 /**
  * Commerce Usage billing cycle type form.
  */
-function commerce_usage_cycle_type_form($form, &$form_state, $billing_cycle_type, $op = 'edit', $entity_type = 'commerce_usage_cycle_type') {
+function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_cycle_type, $op = 'edit', $entity_type = 'commerce_license_billing_cycle_type') {
   global $user;
   $is_new = !empty($billing_cycle_type->is_new) ? $billing_cycle_type->is_new : FALSE;
 
@@ -34,7 +34,7 @@ function commerce_usage_cycle_type_form($form, &$form_state, $billing_cycle_type
     '#default_value' => !empty($billing_cycle_type->name) ? $billing_cycle_type->name : '',
     '#maxlength' => 255,
     '#machine_name' => array(
-      'exists' => 'commerce_usage_name_exists',
+      'exists' => 'commerce_license_billing_cycle_type_name_exists',
       'source' => array('title'),
     ),
     '#disabled' => $is_new && $user->uid != 1,
@@ -55,16 +55,16 @@ function commerce_usage_cycle_type_form($form, &$form_state, $billing_cycle_type
   $form['actions']['submit'] = array(
     '#type' => 'submit',
     '#value' => $is_new ? t('Create') : t('Save'),
-    '#submit' => (!empty($form['#submit']) ? $form['#submit'] : array()) + array('commerce_usage_cycle_type_form_submit'),
+    '#submit' => (!empty($form['#submit']) ? $form['#submit'] : array()) + array('commerce_license_billing_cycle_type_form_submit'),
   );
 
   return $form;
 }
 
 /**
- * Submit callback for commerce_usage_cycle_type_form().
+ * Submit callback for commerce_license_billing_cycle_type_form().
  */
-function commerce_usage_cycle_type_form_submit($form, &$form_state) {
+function commerce_license_billing_cycle_type_form_submit($form, &$form_state) {
   $entity_type = $form['#entity_type'];
   $entity = $form_state[$entity_type];
 
