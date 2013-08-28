@@ -48,10 +48,13 @@ function commerce_license_billing_rules_action_info() {
  * Rules condition callback, check if an order is usaged based elligible.
  */
 function commerce_license_billing_order_elligible_check($order) {
-  // Check if at least one of license is usage based.
+  // Prevent recursion.
+  if ($order->type == 'recurring') {
+    return FALSE;
+  }
+
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
   foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
-    // TODO: Add the instanceof check on the license.
     if (isset($line_item_wrapper->commerce_license)) {
       return TRUE;
     }

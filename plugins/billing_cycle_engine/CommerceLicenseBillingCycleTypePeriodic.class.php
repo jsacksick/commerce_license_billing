@@ -3,35 +3,13 @@
 /**
  * A perodic billing cycle engine API.
  */
-class CommerceLicenseBillingPeriodicCycleType extends CommerceLicenseBillingCycleTypeAbstract implements EntityBundlePluginProvideFieldsInterface {
+class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycleTypeBase {
 
   /**
    * Implements EntityBundlePluginProvideFieldsInterface::fields().
    */
   static function fields() {
-    $fields['cu_periodic_sync']['field'] = array(
-      'type' => 'list_text',
-      'cardinality' => '1',
-      'translatable' => '0',
-      'settings' => array(
-        'allowed_values' => array(
-          'sync' => t('Synchronous'),
-          'async' => t('Asynchronous'),
-        ),
-      ),
-    );
-    $fields['cu_periodic_sync']['instance'] = array(
-      'label' => 'Synchronization',
-      'required' => TRUE,
-      'widget' => array(
-        'active' => 1,
-        'module' => 'options',
-        'settings' => array(),
-        'type' => 'options_select',
-        'weight' => '6',
-      ),
-    );
-    $fields['cu_periodic_periodicity']['field'] = array(
+    $fields['pce_periodicity']['field'] = array(
       'type' => 'list_text',
       'cardinality' => '1',
       'translatable' => '0',
@@ -40,19 +18,38 @@ class CommerceLicenseBillingPeriodicCycleType extends CommerceLicenseBillingCycl
           'daily' => t('Daily'),
           'weekly' => t('Weekly'),
           'monthly' => t('Monthly'),
-          'quarter' => t('Quarter'),
+          'quarter' => t('Quarterly'),
           'yearly' => t('Yearly'),
         ),
       ),
     );
-    $fields['cu_periodic_periodicity']['instance'] = array(
+    $fields['pce_periodicity']['instance'] = array(
       'label' => 'Periodicity',
       'required' => TRUE,
       'widget' => array(
-        'active' => 1,
         'module' => 'options',
         'settings' => array(),
         'type' => 'options_select',
+        'weight' => '6',
+      ),
+    );
+    $fields['pce_async']['field'] = array(
+      'type' => 'list_boolean',
+      'cardinality' => '1',
+      'translatable' => '0',
+      'settings' => array(
+        'allowed_values' => array(0, 1),
+      ),
+    );
+    $fields['pce_async']['instance'] = array(
+      'label' => 'Asynchronous',
+      'required' => TRUE,
+      'widget' => array(
+        'module' => 'options',
+        'type' => 'options_onoff',
+        'settings' => array(
+          'display_label' => TRUE,
+         ),
         'weight' => '6',
       ),
     );
@@ -63,27 +60,26 @@ class CommerceLicenseBillingPeriodicCycleType extends CommerceLicenseBillingCycl
    * Handle async billing cycle for now. Todo: sync billing cycle.
    */
   public function getBillingCycle(CommerceLicenseBillingCycle $old_billing_cycle = NULL) {
-    $request_time = REQUEST_TIME;
     $periodicity_mapping = array(
-      'daily' => '+ 1 day',
-      'weekly' => '+ 1 week',
-      'monthly' => '+ 1 month',
-      'quarter' => '+ 3 month',
-      'yearly' => '+ 1 year',
+      'daily' => '+1 day',
+      'weekly' => '+1 week',
+      'monthly' => '+1 month',
+      'quarter' => '+3 month',
+      'yearly' => '+1 year',
     );
-    $expire = strtotime($periodicity_mapping[$this->wrapper->cu_periodic_periodicity->value()], $request_time);
+    $expire = strtotime($periodicity_mapping[$this->wrapper->pce_periodicity->value()], REQUEST_TIME);
     $existing_cycle = entity_load('commerce_license_billing_cycle', FALSE, array('type' => $this->{$this->nameKey}, 'expire' => $expire));
     if ($existing_cycle) {
       // Return the existing cycle.
       return reset($existing_cycle);
     }
     else {
-      if ($this->wrapper->cu_periodic_sync->value() == 'async') {
+      if ($this->wrapper->pce_async->value()) {
         // Return the next billing cycle.
         if (!empty($old_billing_cycle)) {
-          $expire = strtotime($periodicity_mapping[$this->wrapper->cu_periodic_periodicity->value()], $old_billing_cycle->expire);
+          $expire = strtotime($periodicity_mapping[$this->wrapper->pce_periodicity->value()], $old_billing_cycle->expire);
         }
-        $title = format_date($expire, 'short') . ' - ' . ucfirst($this->wrapper->cu_periodic_periodicity->value());
+        $title = format_date($expire, 'short') . ' - ' . ucfirst($this->wrapper->pce_periodicity->value());
         // Else, create a new one.
         $billing_cycle = entity_create('commerce_license_billing_cycle', array(
           'type' => $this->{$this->nameKey},
