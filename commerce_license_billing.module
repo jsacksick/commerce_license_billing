@@ -460,7 +460,7 @@ function commerce_license_billing_create_recurring_order($order) {
     if (!empty($results['commerce_order'])) {
       $order_id = key($results['commerce_order']);
       // Generate the line items based on license information.
-      foreach ($license as $license) {
+      foreach ($licenses as $license) {
         $line_items = commerce_license_billing_generate_line_items($license, $order_id);
       }
 
@@ -498,7 +498,7 @@ function commerce_license_billing_generate_line_items($license, $order_id) {
   // One line item for the current base plan.
   // @todo Charge for previous plans.
   $line_item = commerce_line_item_new('recurring', $order_id);
-  $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item_wrapper);
+  $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
   $line_item_wrapper->title = $license->wrapper->product->title->value();
   $line_item_wrapper->commerce_product = $license->wrapper->product->value();
   $line_item_wrapper->quantity = 1;
@@ -514,7 +514,7 @@ function commerce_license_billing_generate_line_items($license, $order_id) {
       $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
       $line_item = commerce_line_item_new('recurring');
-      $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item_wrapper);
+      $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
       $line_item_wrapper->title = $product_wrapper->title->value();
       $line_item_wrapper->commerce_product = $product;
       $line_item_wrapper->quantity = $usage['quantity'];
