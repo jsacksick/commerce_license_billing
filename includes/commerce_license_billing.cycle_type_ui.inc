@@ -14,7 +14,7 @@ class CommerceLicenseBillingCycleTypeUIController extends EntityDefaultUIControl
 /**
  * Commerce Usage billing cycle type form.
  */
-function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_cycle_type, $op = 'edit', $entity_type = 'commerce_license_billing_cycle_type') {
+function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_cycle_type, $op = 'edit', $entity_type = 'cl_billing_cycle_type') {
   global $user;
   $is_new = !empty($billing_cycle_type->is_new) ? $billing_cycle_type->is_new : FALSE;
 
@@ -27,7 +27,6 @@ function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_
     '#required' => TRUE,
     '#weight' => -10,
   );
-
   $form['name'] = array(
     '#type' => 'machine_name',
     '#title' => t('Machine name'),
@@ -39,6 +38,16 @@ function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_
     ),
     '#disabled' => $is_new && $user->uid != 1,
     '#weight' => -9,
+  );
+  $form['prepaid'] = array(
+    '#type' => 'select',
+    '#title' => t('Payment type'),
+    '#default_value' => !empty($billing_cycle_type->prepaid),
+    '#options' => array(
+      0 => t('Postpaid'),
+      1 => t('Prepaid'),
+    ),
+    '#weight' => -8,
   );
 
   // Add the field related form elements.
@@ -73,4 +82,17 @@ function commerce_license_billing_cycle_type_form_submit($form, &$form_state) {
   entity_save($entity_type, $entity);
   drupal_set_message(t('Billing cycle type %name saved.', array('%name' => $entity->title)));
   drupal_goto('admin/commerce/config/usage');
+}
+
+/**
+ * Checks whether a cycle type with the provided machine name already exists.
+ */
+function commerce_license_billing_cycle_type_name_exists($machine_name) {
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'cl_billing_cycle_type')
+    ->propertyCondition('name', $machine_name)
+    ->count();
+  $count = $query->execute();
+  return ($count > 0);
 }
