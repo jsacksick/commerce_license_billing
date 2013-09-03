@@ -66,8 +66,8 @@ abstract class CommerceLicenseBillingCycleTypeBase extends Entity implements Com
    *
    * @see Entity::__construct()
    */
-  public function __construct(array $values) {
-    parent::__construct($values, 'commerce_license_billing_cycle_type');
+  public function __construct(array $values, $entityType = NULL) {
+    parent::__construct($values, 'cl_billing_cycle_type');
     $this->wrapper = entity_metadata_wrapper($this->entityType, $this);
   }
 

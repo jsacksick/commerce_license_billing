@@ -15,11 +15,11 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
       'translatable' => '0',
       'settings' => array(
         'allowed_values' => array(
-          'daily' => t('Daily'),
-          'weekly' => t('Weekly'),
-          'monthly' => t('Monthly'),
-          'quarter' => t('Quarterly'),
-          'yearly' => t('Yearly'),
+          'daily' => 'Daily',
+          'weekly' => 'Weekly',
+          'monthly' => 'Monthly',
+          'quarter' => 'Quarterly',
+          'yearly' => 'Yearly',
         ),
       ),
     );
@@ -30,7 +30,6 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
         'module' => 'options',
         'settings' => array(),
         'type' => 'options_select',
-        'weight' => '6',
       ),
     );
     $fields['pce_async']['field'] = array(
@@ -38,19 +37,22 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
       'cardinality' => '1',
       'translatable' => '0',
       'settings' => array(
-        'allowed_values' => array(0, 1),
+        'allowed_values' => array(
+          0 => 'Synchronous',
+          1 => 'Asynchronous'
+        ),
       ),
     );
     $fields['pce_async']['instance'] = array(
       'label' => 'Asynchronous',
-      'required' => TRUE,
+      'required' => FALSE,
       'widget' => array(
         'module' => 'options',
         'type' => 'options_onoff',
         'settings' => array(
-          'display_label' => TRUE,
+          'display_label' => FALSE,
          ),
-        'weight' => '6',
+        'weight' => 399,
       ),
     );
     return $fields;

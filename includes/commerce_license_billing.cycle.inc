@@ -53,7 +53,7 @@ class CommerceLicenseBillingCycle extends Entity {
    * @see Entity::__construct()
    */
   public function __construct(array $values) {
-    parent::__construct($values, 'commerce_license_billing_cycle_type');
+    parent::__construct($values, 'cl_billing_cycle');
     $this->wrapper = entity_metadata_wrapper($this->entityType, $this);
   }
 }
