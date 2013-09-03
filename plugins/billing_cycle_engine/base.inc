@@ -8,9 +8,31 @@
 interface CommerceLicenseBillingCycleEngineInterface extends EntityBundlePluginProvideFieldsInterface {
 
   /**
-   * Returns the billing cycle.
+   * Returns a billing cycle entity with provided start time.
+   *
+   * If an existing billing cycle matches the expected start and end, it will
+   * be returned instead.
+   *
+   * @param $start
+   *   The unix timestamp when the billing cycle needs to start.
+   *
+   * @return
+   *   A cl_billing_cycle entity.
    */
-  public function getBillingCycle(CommerceLicenseBillingCycle $old_billing_cycle = NULL);
+  public function getBillingCycle($start = REQUEST_TIME);
+
+  /**
+   * Returns a label for the billing cycle with the provided start and end.
+   *
+   * @param $start
+   *   The unix timestmap when the billing cycle starts.
+   * @param $end
+   *   The unix timestamp when the billing cycle ends.
+   *
+   * @return
+   *   The billing cycle label.
+   */
+  public function getBillingCycleLabel($start, $end);
 
 }
 
@@ -77,12 +99,4 @@ abstract class CommerceLicenseBillingCycleTypeBase extends Entity implements Com
   static function fields() {
     return array();
   }
-
-  /**
-   * Returns the billing cycle.
-   */
-  public function getBillingCycle(CommerceLicenseBillingCycle $old_billing_cycle = NULL) {
-
-  }
-
 }
