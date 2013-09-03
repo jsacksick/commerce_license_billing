@@ -257,21 +257,25 @@ function commerce_license_billing_configure_product_types() {
       'module' => 'entityreference',
       'settings' => array(
         'target_type' => 'cl_billing_cycle_type',
+        'handler' => 'base',
       ),
     );
     field_create_field($field);
   }
 
   foreach (commerce_license_product_types() as $type_name) {
+    $license_type_instance = field_info_instance('commerce_product', 'commerce_license_type', $type_name);
     $field_instances['cl_billing_cycle_type'] = array(
       'field_name' => 'cl_billing_cycle_type',
       'entity_type' => 'commerce_product',
       'bundle' => $type_name,
       'label' => 'License billing cycle type',
-      'required' => TRUE,
+      'required' => FALSE,
       'widget' => array(
         'type' => 'options_select',
         'module' => 'options',
+        // Make sure that this field is shown right after the license type.
+        'weight' => $license_type_instance['widget']['weight'] + 1,
       ),
     );
 
@@ -312,7 +316,7 @@ function commerce_license_billing_configure_line_item_type() {
       'field_name' => 'cl_billing_start',
       'entity_type' => 'commerce_line_item',
       'bundle' => 'recurring',
-      'label' => 'Billing cycle',
+      'label' => 'Billing cycle start',
       'required' => TRUE,
       'widget' => array(
         'type' => 'date_select',
@@ -339,7 +343,7 @@ function commerce_license_billing_configure_line_item_type() {
       'field_name' => 'cl_billing_end',
       'entity_type' => 'commerce_line_item',
       'bundle' => 'recurring',
-      'label' => 'Billing cycle',
+      'label' => 'Billing cycle end',
       'required' => TRUE,
       'widget' => array(
         'type' => 'date_select',
@@ -373,6 +377,7 @@ function commerce_license_billing_configure_order_type() {
       'module' => 'entityreference',
       'settings' => array(
         'target_type' => 'cl_billing_cycle',
+        'handler' => 'base',
       ),
     );
     field_create_field($field);
