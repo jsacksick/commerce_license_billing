@@ -16,6 +16,12 @@ function commerce_license_billing_default_rules_configuration() {
       "REQUIRES" : [ "rules", "commerce_license_billing", "commerce_product_reference" ],
       "ON" : [ "commerce_product_calculate_sell_price" ],
       "IF" : [
+        { "NOT entity_is_of_bundle" : {
+            "entity" : [ "commerce-line-item" ],
+            "type" : "commerce_line_item",
+            "bundle" : { "value" : { "recurring" : "recurring" } }
+          }
+        },
         { "entity_has_field" : { "entity" : [ "commerce-line-item" ], "field" : "commerce_product" } },
         { "commerce_license_billing_product_is_postpaid" : { "commerce_product" : [ "commerce-line-item:commerce-product" ] } }
       ],
