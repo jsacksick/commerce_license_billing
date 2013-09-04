@@ -18,8 +18,6 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
           'daily' => 'Daily',
           'weekly' => 'Weekly',
           'monthly' => 'Monthly',
-          'quarter' => 'Quarterly',
-          'yearly' => 'Yearly',
         ),
       ),
     );
@@ -59,38 +57,103 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
   }
 
   /**
-   * Handle async billing cycle for now. Todo: sync billing cycle.
+   * Returns a billing cycle entity with the provided start time.
+   *
+   * If an existing billing cycle matches the expected start and end, it will
+   * be returned instead.
+   *
+   * @param $start
+   *   The unix timestamp when the billing cycle needs to start.
+   *
+   * @return
+   *   A cl_billing_cycle entity.
    */
-  public function getBillingCycle(CommerceLicenseBillingCycle $old_billing_cycle = NULL) {
+  public function getBillingCycle($start = REQUEST_TIME) {
+    $periodicity = $this->wrapper->pce_periodicity->value();
+    if (!$this->wrapper->pce_async->value()) {
+      // This is a synchronous billing cycle, normalize the start timestamp.
+      switch ($periodicity) {
+        case 'daily':
+          $start = strtotime('today');
+          break;
+        case 'weekly':
+          $day = date('d', $start);
+          $month = date('m', $start);
+          $year = date('Y', $start);
+          $start = strtotime('this week', mktime(0, 0, 0, $month, $day, $year));
+          break;
+        case 'monthly':
+          $start = strtotime(date('F Y', $start));
+          break;
+      }
+    }
+    // Calculate the end timestamp.
     $periodicity_mapping = array(
       'daily' => '+1 day',
       'weekly' => '+1 week',
       'monthly' => '+1 month',
-      'quarter' => '+3 month',
-      'yearly' => '+1 year',
     );
-    $expire = strtotime($periodicity_mapping[$this->wrapper->pce_periodicity->value()], REQUEST_TIME);
-    $existing_cycle = entity_load('commerce_license_billing_cycle', FALSE, array('type' => $this->{$this->nameKey}, 'expire' => $expire));
-    if ($existing_cycle) {
-      // Return the existing cycle.
-      return reset($existing_cycle);
+    // The 1 is substracted to make sure that the billing cycle ends 1s before
+    // the next one starts (January 31st 23:59:59, for instance, with the
+    // next one starting on February 1st 00:00:00).
+    $end = strtotime($periodicity_mapping[$periodicity], $start) - 1;
+
+    // Try to find an existing billing cycle matching our parameters.
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'cl_billing_cycle')
+      ->entityCondition('bundle', $this->name)
+      ->propertyCondition('start', $start)
+      ->propertyCondition('end', $end);
+    $result = $query->execute();
+    if ($result) {
+      $billing_cycle_ids = array_keys($result['cl_billing_cycle']);
+      $billing_cycle_id = reset($billing_cycle_ids);
+      $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
     }
     else {
-      if ($this->wrapper->pce_async->value()) {
-        // Return the next billing cycle.
-        if (!empty($old_billing_cycle)) {
-          $expire = strtotime($periodicity_mapping[$this->wrapper->pce_periodicity->value()], $old_billing_cycle->expire);
-        }
-        $title = format_date($expire, 'short') . ' - ' . ucfirst($this->wrapper->pce_periodicity->value());
-        // Else, create a new one.
-        $billing_cycle = entity_create('commerce_license_billing_cycle', array(
-          'type' => $this->{$this->nameKey},
-          'title' => $title,
-          'status' => 1,
-          'expire' => $expire,
-        ));
-        $billing_cycle->save();
-        return $billing_cycle;
+      // No existing billing cycle found. Create a new one.
+      $billing_cycle = entity_create('cl_billing_cycle', array('type' => $this->name));
+      $billing_cycle->status = 1;
+      $billing_cycle->start = $start;
+      $billing_cycle->end = $end;
+      $billing_cycle->save();
+    }
+
+    return $billing_cycle;
+  }
+
+  /**
+   * Returns a label for a billing cycle with the provided start and end.
+   *
+   * @param $start
+   *   The unix timestmap when the billing cycle starts.
+   * @param $end
+   *   The unix timestamp when the billing cycle ends.
+   *
+   * @return
+   *   The billing cycle label.
+   */
+  public function getBillingCycleLabel($start, $end) {
+    $async = $this->wrapper->pce_async->value();
+    $periodicity = $this->wrapper->pce_periodicity->value();
+    // Example: January 15th 2013
+    if ($periodicity == 'daily') {
+      return date('F jS Y', $end);
+    }
+
+    if ($async) {
+      // Example: January 1st 2013 - January 31st 2013.
+      return date('F jS Y', $start) . ' - ' . date('F jS Y', $end);
+    }
+    else {
+      if ($periodicity == 'weekly') {
+        // Example: January 1st 2013 - January 7th 2013.
+        return date('F jS Y', $start) . ' - ' . date('F jS Y', $end);
+      }
+      elseif ($periodicity == 'monthly') {
+        // Example: January 2013.
+        return date('F Y');
       }
     }
   }

@@ -20,21 +20,20 @@ function commerce_license_billing_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
-      'title' => array(
-        'description' => 'The human-readable name of the billing cycle.',
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
-      ),
       'status' => array(
         'description' => 'Whether the billing cycle is open or closed.',
         'type' => 'int',
         'not null' => TRUE,
         'default' => 0,
       ),
-      'expire' => array(
-        'description' => 'The Unix timestamp when the billing cycle expires.',
+      'start' => array(
+        'description' => 'The Unix timestamp when the billing cycle starts.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'end' => array(
+        'description' => 'The Unix timestamp when the billing cycle ends.',
         'type' => 'int',
         'not null' => TRUE,
         'default' => 0,

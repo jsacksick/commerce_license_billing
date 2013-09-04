@@ -20,13 +20,6 @@ class CommerceLicenseBillingCycle extends Entity {
   public $type;
 
   /**
-   * The human-readable name of the billing cycle.
-   *
-   * @var string
-   */
-  public $title;
-
-  /**
    * Whether the billing cycle is open or closed.
    *
    * @var boolean
@@ -34,11 +27,18 @@ class CommerceLicenseBillingCycle extends Entity {
   public $status;
 
   /**
-   * The date (unix timestamp) when the billing cycle expires.
+   * The date (unix timestamp) when the billing cycle starts.
    *
    * @var integer
    */
-  public $expires;
+  public $start;
+
+  /**
+   * The date (unix timestamp) when the billing cycle ends.
+   *
+   * @var integer
+   */
+  public $end;
 
   /**
    * Metadata wrapper.
@@ -55,5 +55,13 @@ class CommerceLicenseBillingCycle extends Entity {
   public function __construct(array $values) {
     parent::__construct($values, 'cl_billing_cycle');
     $this->wrapper = entity_metadata_wrapper($this->entityType, $this);
+  }
+
+  /**
+   * Overrides Entity::label().
+   */
+  public function label() {
+    $type = entity_load_single('cl_billing_cycle_type', $this->type);
+    return $type->getBillingCycleLabel($this->start, $this->end);
   }
 }

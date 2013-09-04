@@ -55,6 +55,7 @@ function commerce_license_billing_entity_info() {
     'base table' => 'cl_billing_cycle',
     'entity class' => 'CommerceLicenseBillingCycle',
     'controller class' => 'EntityAPIController',
+    'label callback' => 'entity_class_label',
     'fieldable' => FALSE,
     'bundles' => array(),
     'bundle keys' => array(
@@ -63,7 +64,6 @@ function commerce_license_billing_entity_info() {
     'entity keys' => array(
       'id' => 'billing_cycle_id',
       'bundle' => 'type',
-      'label' => 'title',
     ),
   );
   // Bypass entity_load() as it cannot be used here (recursion).
