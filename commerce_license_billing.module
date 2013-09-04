@@ -719,6 +719,6 @@ function commerce_license_billing_usage_list($license, $group) {
     'group' => $group,
   );
   $usage = db_query("SELECT * FROM {cl_billing_usage}
-                      WHERE license_id = :license_id AND usage_group = :group", $data)->fetchAll();
+                      WHERE license_id = :license_id AND usage_group = :group", $data)->fetchAll(PDO::FETCH_ASSOC);
   return $usage;
 }
