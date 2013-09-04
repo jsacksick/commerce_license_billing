@@ -441,21 +441,28 @@ function commerce_license_billing_configure_order_type() {
  *   The order to use as a base of the new recurring order.
  */
 function commerce_license_billing_create_recurring_order($order) {
-  // Gather the billing cycles.
+  // Group licenses by billing cycle type.
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
-  $billing_cycles = array();
+  $billing_cycle_type_ids = array();
+  $grouped_licenses = array();
   foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
     if (!empty($line_item_wrapper->value()->commerce_license)) {
       $product_wrapper = $line_item_wrapper->commerce_product;
-      if (!empty($product_wrapper->value()->cl_billing_type)) {
-        $billing_cycle_type = $product_wrapper->cl_billing_cycle_type->value();
-        $billing_cycle = $billing_cycle_type->getBillingCycle();
-        $billing_cycles[$billing_cycle->id][] = $line_item_wrapper->commerce_license->value();
+      if (!empty($product_wrapper->value()->cl_billing_cycle_type)) {
+        $billing_cycle_type_id = $product_wrapper->cl_billing_cycle_type->raw();
+        $billing_cycle_type_ids[] = $billing_cycle_type_id;
+        $grouped_licenses[$billing_cycle_type_id][] = $line_item_wrapper->commerce_license->value();
       }
     }
   }
-  // Create a recurring order for each billing cycle.
-  foreach ($billing_cycles as $billing_cycle_id => $licenses) {
+  // Load all found billing cycle types.
+  $billing_cycle_types = entity_load('cl_billing_cycle_type', $billing_cycle_type_ids);
+
+  // Ensure there's a recurring order for each group of licenses.
+  foreach ($grouped_licenses as $billing_cycle_type_id => $licenses) {
+    $billing_cycle_type = $billing_cycle_types[$billing_cycle_type_id];
+    $billing_cycle = $billing_cycle_type->getBillingCycle();
+
     // Check if there's an existing order attached to that billing cycle.
     $query = new EntityFieldQuery();
     $query
@@ -463,27 +470,28 @@ function commerce_license_billing_create_recurring_order($order) {
       ->entityCondition('bundle', 'recurring')
       ->propertyCondition('status', 'recurring_open')
       ->propertyCondition('uid', $order->uid)
-      ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle_id);
+      ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle->billing_cycle_id);
     $results = $query->execute();
     if (!empty($results['commerce_order'])) {
       $order_id = key($results['commerce_order']);
-      // Generate the line items based on license information.
+      $order = commerce_order_load($order_id);
+      $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
       foreach ($licenses as $license) {
-        $line_items = commerce_license_billing_generate_line_items($license, $order_id);
+        $line_items = commerce_license_billing_generate_line_items($billing_cycle, $license, $order_id);
       }
-
-      $recurring_order = entity_metadata_wrapper('commerce_order', $order_id);
-      $recurring_order->commerce_line_items = array_merge($recurring_order->commerce_line_items->value(), $line_items);
-      $recurring_order->save();
+      $order_wrapper->commerce_line_items = array_merge($order_wrapper->commerce_line_items->value(), $line_items);
+      $order_wrapper->save();
     }
     else {
-      $recurring_order = commerce_order_new($order->uid, 'recurring_open', 'recurring');
-      $order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+      // Save the order right away to get the order_id.
+      $order = commerce_order_new($order->uid, 'recurring_open', 'recurring');
+      commerce_order_save($order);
+
+      $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
       $order_wrapper->cl_billing_cycle = $billing_cycle_id;
-      $order_wrapper->save();
       // Generate the line items based on license information.
-      foreach ($license as $license) {
-        $line_items = commerce_license_billing_generate_line_items($license, $order_wrapper->order_id->value());
+      foreach ($licenses as $license) {
+        $line_items = commerce_license_billing_generate_line_items($billing_cycle, $license, $order_wrapper->order_id->value());
       }
       $order_wrapper->commerce_line_items = $line_items;
       $order_wrapper->save();
@@ -492,8 +500,13 @@ function commerce_license_billing_create_recurring_order($order) {
 }
 
 /**
- * Generates the line items for the provided license.
+ * Generates the line items for the provided license and billing cycle.
  *
+ * All line items have their prices prorated based on their duration and the
+ * billing cycle duration.
+ *
+ * @param $billing_cycle
+ *   The billing cycle entity.
  * @param $license
  *   The license entity.
  * @param $order
@@ -501,36 +514,72 @@ function commerce_license_billing_create_recurring_order($order) {
  * @return
  *   An array of saved line items.
  */
-function commerce_license_billing_generate_line_items($license, $order_id) {
+function commerce_license_billing_generate_line_items($billing_cycle, $license, $order_id) {
+  $billing_cycle_duration = $billing_cycle->end - $billing_cycle->start;
   $line_items = array();
-  // One line item for the current base plan.
-  // @todo Charge for previous plans.
-  $line_item = commerce_line_item_new('recurring', $order_id);
-  $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-  $line_item_wrapper->title = $license->wrapper->product->title->value();
-  $line_item_wrapper->commerce_product = $license->wrapper->product->value();
-  $line_item_wrapper->quantity = 1;
-  $line_item_wrapper->save();
-  $line_items[] = $line_item_wrapper->value();
+
+  $history = commerce_license_billing_product_history_list($license);
+  // Gather all products.
+  foreach ($history as $history_entry) {
+    $product_ids[] = $history_entry['product_id'];
+  }
+  $products = commerce_product_load_multiple($product_ids);
+  // Create a line item per product.
+  foreach ($history as $history_entry) {
+    $product_id = $history_entry['product_id'];
+    $product = $products[$product_id];
+    // Calculate the prorated price.
+    $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+    $price = $product_wrapper->commerce_price->value();
+    if ($price['amount'] > 0) {
+      $history_duration = $history_entry['end'] - $history_entry['start'];
+      $price['amount'] *= $history_duration / $billing_cycle_duration;
+      $price['amount'] = round($price['amount']);
+    }
+
+    $line_item = commerce_line_item_new('recurring', $order_id);
+    $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+    $line_item_wrapper->line_item_label = $product->title;
+    $line_item_wrapper->commerce_product = $product;
+    $line_item_wrapper->quantity = 1;
+    $line_item_wrapper->commerce_unit_price = $price;
+    $line_item_wrapper->cl_billing_start = $history_entry['start'];
+    $line_item_wrapper->cl_billing_end = $history_entry['end'];
+    $line_item_wrapper->save();
+    $line_items[] = $line_item_wrapper->value();
+  }
 
   if ($license instanceof CommerceLicenseBillingUsageInterface) {
     foreach ($license->usageGroups() as $group_name => $group_info) {
-      // Will return all usage that’s more than $group_info['free_quantity'], with the start and end
-      // dates that need to be set on the line item
-      $usage = commerce_license_billing_usage_list($this, $group_name);
-      $product = commerce_product_load_by_sku($group_info['product']);
-      $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+      $current_usage = commerce_license_billing_current_usage($license, $group_name);
+      if ($current_usage <= $group_info['free_quantity']) {
+        // Current usage is free, there's nothing to charge for.
+        continue;
+      }
 
-      $line_item = commerce_line_item_new('recurring');
-      $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-      $line_item_wrapper->title = $product_wrapper->title->value();
-      $line_item_wrapper->commerce_product = $product;
-      $line_item_wrapper->quantity = $usage['quantity'];
-      $line_item_wrapper->commerce_unit_price = $product_wrapper->commerce_price->amount->value();
-      $line_item_wrapper->cl_billing_start = $usage['start'];
-      $line_item_wrapper->cl_billing_end = $usage['end'];
-      $line_item_wrapper->save();
-      $line_items[] = $line_item_wrapper->value();
+      $usage = commerce_license_billing_usage_list($this, $group_name);
+      foreach ($usage as $usage_entry) {
+        $product = commerce_product_load_by_sku($group_info['product']);
+        // Calculate the prorated price.
+        $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+        $price = $product_wrapper->commerce_price->value();
+        if ($price['amount'] > 0) {
+          $usage_duration = $usage_entry['end'] - $usage_entry['start'];
+          $price['amount'] *= $usage_duration / $billing_cycle_duration;
+          $price['amount'] = round($price['amount']);
+        }
+
+        $line_item = commerce_line_item_new('recurring');
+        $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+        $line_item_wrapper->line_item_label = $product_wrapper->title->value();
+        $line_item_wrapper->commerce_product = $product;
+        $line_item_wrapper->quantity = $usage['quantity'];
+        $line_item_wrapper->commerce_unit_price = $price;
+        $line_item_wrapper->cl_billing_start = $billing_cycle_duration['start'];
+        $line_item_wrapper->cl_billing_end = $billing_cycle_duration['end'];
+        $line_item_wrapper->save();
+        $line_items[] = $line_item_wrapper->value();
+      }
     }
   }
 
@@ -742,7 +791,6 @@ function commerce_license_billing_usage_list($license, $group) {
   if (!isset($usage_groups[$group])) {
     throw new Exception('Invalid usage group specified for commerce_license_billing_usage_list().');
   }
-  $usage_group = $usage_groups[$group];
 
   $data = array(
     ':license_id' => $license->license_id,
@@ -750,5 +798,5 @@ function commerce_license_billing_usage_list($license, $group) {
   );
   $usage = db_query("SELECT * FROM {cl_billing_usage}
                       WHERE license_id = :license_id AND usage_group = :group", $data)->fetchAll(PDO::FETCH_ASSOC);
-  return $usage;
+  return (array) $usage;
 }
