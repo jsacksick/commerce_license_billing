@@ -538,14 +538,75 @@ function commerce_license_billing_generate_line_items($license, $order_id) {
 }
 
 /**
+ * Implements hook_commerce_license_update().
+ *
+ * Maintains the license product history.
+ */
+function commerce_license_billing_commerce_license_update($license) {
+  $status_changed = ($license->status > $license->original->status);
+  $product_changed = ($license->product_id != $license->original->product_id);
+
+  if ($license->status == COMMERCE_LICENSE_ACTIVE && $status_changed) {
+    // The license was just granted.
+    commerce_license_billing_product_history_open($license, $license->product_id);
+  }
+  elseif ($license->status == COMMERCE_LICENSE_REVOKED && $status_changed) {
+    // The license was just revoked.
+    commerce_license_billing_product_history_close($license, $license->product_id);
+  }
+  elseif ($license->status == COMMERCE_LICENSE_ACTIVE && $product_changed) {
+    // The license product has changed.
+    commerce_license_billing_product_history_close($license, $license->original->product_id);
+    commerce_license_billing_product_history_open($license, $license->product_id);
+  }
+}
+
+/**
+ * Creates an open license product history entry.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $product_id
+ *   The product id.
+ */
+function commerce_license_billing_product_history_open($license, $product_id) {
+  db_insert('cl_product_history')
+    ->fields(array(
+      'license_id' => $license->license_id,
+      'product_id' => $product_id,
+      'start' => REQUEST_TIME,
+    ))
+    ->execute();
+}
+
+/**
+ * Closes a license product history entry.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $product_id
+ *   The product id.
+ */
+function commerce_license_billing_product_history_close($license, $product_id) {
+  db_update('cl_product_history')
+    ->fields(array(
+      'end' => REQUEST_TIME,
+    ))
+    ->condition('license_id', $license->license_id)
+    ->condition('product_id', $product_id)
+    ->condition('end', 0)
+    ->execute();
+}
+
+/**
  * Adds usage for the specified license and usage group.
  *
  * @param $license
  *   The license entity.
  * @param $group
  *   The usage group, as defined by $license->usageGroups().
- * @param $usage
- *   The numeric usage.
+ * @param $quantity
+ *   The usage quantity.
  * @param $start
  *   The unix timestamp when usage started. Optional if the usage group
  *   specified "immediate" => TRUE, otherwise required.
@@ -553,7 +614,7 @@ function commerce_license_billing_generate_line_items($license, $order_id) {
  *   The unix timestamp when usage ended. Optional if the usage group
  *   specified "immediate" => TRUE, otherwise required.
  */
-function commerce_license_billing_usage_add($license, $group, $usage, $start = NULL, $end = NULL) {
+function commerce_license_billing_usage_add($license, $group, $quantity, $start = NULL, $end = NULL) {
   $usage_groups = $license->usageGroups();
   if (!isset($usage_groups[$group])) {
     throw new Exception('Invalid usage group specified for commerce_license_billing_usage_add().');
@@ -571,8 +632,8 @@ function commerce_license_billing_usage_add($license, $group, $usage, $start = N
   db_insert('cl_billing_usage')
     ->fields(array(
       'license_id' => $license->license_id,
-      'group' => $group,
-      'usage' => $usage,
+      'usage_group' => $group,
+      'quantity' => $quantity,
       'start' => $start,
       'end' => (int) $end,
     ))
@@ -591,13 +652,16 @@ function commerce_license_billing_usage_clear($license, $group = NULL) {
   $delete = db_delete('cl_billing_usage');
   $delete->condition('license_id', $license->license_id);
   if ($group) {
-    $delete->condition('group', $group);
+    $delete->condition('usage_group', $group);
   }
   $delete->execute();
 }
 
 /**
- * Returns the usage total for the provided license and usage group.
+ * Returns the current usage for the provided license and usage group.
+ *
+ * If the usage group is of type 'total', the total usage is returned.
+ * If the usage group is of type 'average', the last reported usage is returned.
  *
  * @param  $license
  *   The license entity.
@@ -605,23 +669,31 @@ function commerce_license_billing_usage_clear($license, $group = NULL) {
  *   The usage group, as defined by $license->usageGroups().
  *
  * @return
- *   The numeric usage total.
+ *   The numeric usage amount.
  */
-function commerce_license_billing_usage_total($license, $group) {
+function commerce_license_billing_current_usage($license, $group) {
   $usage_groups = $license->usageGroups();
   if (!isset($usage_groups[$group])) {
-    throw new Exception('Invalid usage group specified for commerce_license_billing_usage_total().');
+    throw new Exception('Invalid usage group specified for commerce_license_billing_current_usage().');
   }
   $usage_group = $usage_groups[$group];
-  $function = ($usage_group['type'] == 'total') ? 'SUM' : 'AVG';
+
   $data = array(
-    'license_id' => $license->license_id,
-    'group' => $group,
+    ':license_id' => $license->license_id,
+    ':group' => $group,
   );
-  $total = db_query("SELECT $function(usage) FROM {cl_billing_usage}
-                      WHERE license_id = :license_id AND group = :group
-                        GROUP BY (license_id, group)", $data)->fetchColumn();
-  return $total;
+  if ($usage_group['type'] == 'total') {
+    $usage = db_query("SELECT SUM(quantity) FROM {cl_billing_usage}
+                    WHERE license_id = :license_id AND usage_group = :group
+                      GROUP BY license_id, usage_group", $data)->fetchColumn();
+  }
+  elseif ($usage_group['type'] == 'average') {
+    $usage = db_query("SELECT quantity FROM {cl_billing_usage}
+                    WHERE license_id = :license_id AND usage_group = :group
+                      ORDER BY start DESC LIMIT 1", $data)->fetchColumn();
+  }
+
+  return (int) $usage;
 }
 
 /**
@@ -631,6 +703,9 @@ function commerce_license_billing_usage_total($license, $group) {
  *   The license entity.
  * @param $group
  *   The usage group, as defined by $license->usageGroups().
+ *
+ * @return
+ *   An array of usage records.
  */
 function commerce_license_billing_usage_list($license, $group) {
   $usage_groups = $license->usageGroups();
@@ -644,6 +719,6 @@ function commerce_license_billing_usage_list($license, $group) {
     'group' => $group,
   );
   $usage = db_query("SELECT * FROM {cl_billing_usage}
-                      WHERE license_id = :license_id AND group = :group", $data)->fetchAll();
+                      WHERE license_id = :license_id AND usage_group = :group", $data)->fetchAll();
   return $usage;
 }
