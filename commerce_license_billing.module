@@ -296,8 +296,11 @@ function commerce_license_billing_configure_product_types() {
  * - cl_billing_end: a datetime field.
  */
 function commerce_license_billing_configure_line_item_type() {
+  if (!$line_item_type = commerce_line_item_type_load('recurring')) {
+    return;
+  }
   // Make sure Commerce has created all of its required fields.
-  commerce_line_item_configure_line_item_type('recurring');
+  commerce_line_item_configure_line_item_type($line_item_type);
 
   $field = field_info_field('cl_billing_start');
   if (empty($field)) {
