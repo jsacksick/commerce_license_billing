@@ -538,6 +538,19 @@ function commerce_license_billing_generate_line_items($license, $order_id) {
 }
 
 /**
+ * Implements hook_commerce_license_insert().
+ *
+ * Maintains the license product history for licenses that are created as
+ * active right away.
+ */
+function commerce_license_billing_commerce_license_insert($license) {
+  if ($license->status == COMMERCE_LICENSE_ACTIVE) {
+    // The license was just granted.
+    commerce_license_billing_product_history_open($license, $license->product_id);
+  }
+}
+
+/**
  * Implements hook_commerce_license_update().
  *
  * Maintains the license product history.
