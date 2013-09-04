@@ -612,6 +612,23 @@ function commerce_license_billing_product_history_close($license, $product_id) {
 }
 
 /**
+ * Returns all license product history entries.
+ *
+ * @param $license
+ *   The license entity.
+ *
+ * @return
+ *   An array of history entries.
+ */
+function commerce_license_billing_product_history_list($license) {
+  $data = array(
+    ':license_id' => $license->license_id,
+  );
+  $history = db_query("SELECT * FROM {cl_product_history} WHERE license_id = :license_id", $data)->fetchAll(PDO::FETCH_ASSOC);
+  return $history;
+}
+
+/**
  * Adds usage for the specified license and usage group.
  *
  * @param $license
@@ -728,8 +745,8 @@ function commerce_license_billing_usage_list($license, $group) {
   $usage_group = $usage_groups[$group];
 
   $data = array(
-    'license_id' => $license->license_id,
-    'group' => $group,
+    ':license_id' => $license->license_id,
+    ':group' => $group,
   );
   $usage = db_query("SELECT * FROM {cl_billing_usage}
                       WHERE license_id = :license_id AND usage_group = :group", $data)->fetchAll(PDO::FETCH_ASSOC);
