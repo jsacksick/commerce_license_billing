@@ -356,6 +356,9 @@ function commerce_license_billing_generate_line_items($billing_cycle, $license, 
     $line_item_wrapper->commerce_unit_price = $price;
     $line_item_wrapper->cl_billing_start = $history_entry['start'];
     $line_item_wrapper->cl_billing_end = $history_entry['end'];
+    // Trigger price calculation to get any needed discounts or price changes.
+    rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
+    // Save the line item.
     $line_item_wrapper->save();
     $line_items[] = $line_item_wrapper->value();
   }
@@ -388,6 +391,9 @@ function commerce_license_billing_generate_line_items($billing_cycle, $license, 
         $line_item_wrapper->commerce_unit_price = $price;
         $line_item_wrapper->cl_billing_start = $billing_cycle_duration['start'];
         $line_item_wrapper->cl_billing_end = $billing_cycle_duration['end'];
+        // Trigger price calculation to get any needed discounts or price changes.
+        rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
+        // Save the line item.
         $line_item_wrapper->save();
         $line_items[] = $line_item_wrapper->value();
       }
