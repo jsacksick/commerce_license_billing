@@ -356,6 +356,7 @@ function commerce_license_billing_generate_line_items($billing_cycle, $license, 
     $line_item_wrapper->commerce_unit_price = $price;
     $line_item_wrapper->cl_billing_start = $history_entry['start'];
     $line_item_wrapper->cl_billing_end = $history_entry['end'];
+    $line_item_wrapper->cl_billing_license = $license;
     // Trigger price calculation to get any needed discounts or price changes.
     rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
     // Save the line item.
@@ -391,6 +392,7 @@ function commerce_license_billing_generate_line_items($billing_cycle, $license, 
         $line_item_wrapper->commerce_unit_price = $price;
         $line_item_wrapper->cl_billing_start = $billing_cycle_duration['start'];
         $line_item_wrapper->cl_billing_end = $billing_cycle_duration['end'];
+        $line_item_wrapper->cl_billing_license = $license;
         // Trigger price calculation to get any needed discounts or price changes.
         rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
         // Save the line item.
@@ -673,6 +675,8 @@ function commerce_license_billing_configure_product_types() {
  * Fields:
  * - cl_billing_start: a datetime field.
  * - cl_billing_end: a datetime field.
+ * - cl_billing_license: an entityreference field pointing to the license
+ *   for which the line item was generated.
  */
 function commerce_license_billing_configure_line_item_type() {
   if (!$line_item_type = commerce_line_item_type_load('recurring')) {
@@ -734,6 +738,31 @@ function commerce_license_billing_configure_line_item_type() {
     );
     field_create_instance($instance);
   }
+
+  $field = field_info_field('cl_billing_license');
+  if (!$field) {
+    $field = array(
+      'settings' => array(
+        'handler' => 'base',
+        'target_type' => 'commerce_license',
+      ),
+      'field_name' => 'cl_billing_license',
+      'type' => 'entityreference',
+    );
+    field_create_field($field);
+  }
+  $instance = field_info_instance('commerce_line_item', 'cl_billing_license', 'recurring');
+  if (empty($instance)) {
+    $instance = array(
+      'field_name' => 'cl_billing_license',
+      'entity_type' => 'commerce_line_item',
+      'bundle' => 'recurring',
+      'label' => 'License',
+      'required' => TRUE,
+    );
+
+    field_create_instance($instance);
+  }
 }
 
 /**
@@ -742,8 +771,6 @@ function commerce_license_billing_configure_line_item_type() {
  * Fields:
  * - cl_billing_cycle: an entityreference field pointing to a
  *   billing cycle.
- * - commerce_order_licenses: an entityreference field pointing to all licenses
- *   renewed by the recurring order.
  */
 function commerce_license_billing_configure_order_type() {
   // Make sure Commerce has created all of its required fields.
@@ -777,32 +804,6 @@ function commerce_license_billing_configure_order_type() {
         'module' => 'options',
       ),
     );
-    field_create_instance($instance);
-  }
-
-  $field = field_info_field('commerce_order_licenses');
-  if (!$field) {
-    $field = array(
-      'settings' => array(
-        'handler' => 'base',
-        'target_type' => 'commerce_license',
-      ),
-      'field_name' => 'commerce_order_licenses',
-      'type' => 'entityreference',
-    );
-    field_create_field($field);
-  }
-
-  $instance = field_info_instance('commerce_order', 'commerce_order_licenses', 'recurring');
-  if (empty($instance)) {
-    $instance = array(
-      'field_name' => 'commerce_order_licenses',
-      'entity_type' => 'commerce_order',
-      'bundle' => 'recurring',
-      'label' => 'License',
-      'required' => TRUE,
-    );
-
     field_create_instance($instance);
   }
 }
