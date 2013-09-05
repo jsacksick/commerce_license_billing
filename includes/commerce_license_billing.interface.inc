@@ -13,30 +13,43 @@ interface CommerceLicenseBillingUsageInterface {
    *
    * Each group must have the following keys:
    * - title: The name of the usage group, usually used by usageDetails().
-   * - type: The type of the usage group (total or average). Determines
+   * - type: The type of the usage group (counter or gauge). Determines
    *   how the usage will be calculated, and subsequently charged for.
+   *   The counter tracks usage over time, and is always charged for
+   *   in total. For example if the following bandwidth usage was reported:
+   *   "Jan 1st - Jan 15th; 1024" and "Jan 15th - Jan 31st; 128", there
+   *   will be one line item, charging for 1052mb of usage.
+   *   The gauge tracks discrete usage values over time, and each
+   *   value is charged for separately. For example, if the following env
+   *   usage is reported "Jan 1st - Jan 15th; 2" and "Jan 15th - Jan 31st; 4",
+   *   there will be two prorated line items, charging for 2 and 4 environments.
    * - product: The sku of the product representing the usage group. Linked
    *   from the line item that charges for the usage.
-   * - immediate: Whether usage changes are guaranteed to be reported right
-   *   away. If FALSE, the billing cycle won't be closed until the complete
-   *   usage for the previous period has been reported.
    * Optional keys:
    * - free_quantity: The quantity provided for free with the license. Only
    *   usage exceeding this quantity will be charged for.
+   *   For type 'counter' this means that the free quantity is subtracted
+   *   from the total quantity. For type 'gauge' this means that the gauge
+   *   values that equal free_quantity are ignored.
+   * Optional keys for the 'gauge' type.
+   * - immediate: Whether usage changes are guaranteed to be reported right
+   *   away. If FALSE, the billing cycle won't be closed until the complete
+   *   usage for the previous period has been reported.
+   *   If TRUE, the usage is open-ended and will be carried over into next
+   *   billing cycles. The 'counter' type always assumes immediate to be FALSE.
    *
    * <code>
    * return array(
-   *  'bandwith' => array(
-   *     'title' => t('Bandwith'),
-   *     'type' => 'total',
-   *     'product' => 'SKU-BANDWITH',
-   *     'immediate' => FALSE,
-   *     'free_quantity' => 1,
+   *   'bandwidth' => array(
+   *     'title' => t('Bandwidth'),
+   *     'type' => 'counter',
+   *     'product' => 'BILLING-TEST-BANDWIDTH',
+   *     'free_quantity' => 0,
    *   ),
-   *   'time' => array(
-   *     'title' => t('Time'),
-   *     'type' => 'total',
-   *     'product' => 'SKU-TIME',
+   *   'environments' => array(
+   *     'title' => t('Development environments'),
+   *     'type' => 'gauge',
+   *     'product' => 'BILLING-TEST-ENV',
    *     'immediate' => TRUE,
    *     'free_quantity' => 0,
    *   ),

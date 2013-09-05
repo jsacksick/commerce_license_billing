@@ -25,19 +25,8 @@ function commerce_license_billing_test_install() {
 
   $product = commerce_product_new('product');
   $product->uid = 1;
-  $product->title = 'Extra storage';
-  $product->sku = 'BILLING-TEST-STORAGE';
-  $product->status = 1;
-  $product->commerce_price[LANGUAGE_NONE][0] = array(
-    'amount' => 10,
-    'currency_code' => 'USD',
-  );
-  commerce_product_save($product);
-
-  $product = commerce_product_new('product');
-  $product->uid = 1;
-  $product->title = 'Bandwith';
-  $product->sku = 'BILLING-TEST-BANDWITH';
+  $product->title = 'Bandwidth';
+  $product->sku = 'BILLING-TEST-BANDWIDTH';
   $product->status = 1;
   $product->commerce_price[LANGUAGE_NONE][0] = array(
     'amount' => 10,

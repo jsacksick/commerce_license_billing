@@ -10,20 +10,19 @@ class CommerceLicenseBillingTest extends CommerceLicenseBase implements Commerce
    */
   public function usageGroups() {
     return array(
+      // Track GBs of bandwidth used.
+      'bandwidth' => array(
+        'title' => t('Bandwidth'),
+        'type' => 'counter',
+        'product' => 'BILLING-TEST-BANDWIDTH',
+        'free_quantity' => 1024,
+      ),
       'environments' => array(
         'title' => t('Development environments'),
-        'type' => 'average',
+        'type' => 'gauge',
         'product' => 'BILLING-TEST-ENV',
         'immediate' => TRUE,
-        'free_quantity' => 0,
-      ),
-      // Track MBs of storage used.
-      'storage' => array(
-        'title' => t('Storage'),
-        'type' => 'total',
-        'product' => 'BILLING-TEST-STORAGE',
-        'immediate' => TRUE,
-        'free_quantity' => 1024,
+        'free_quantity' => 1,
       ),
     );
   }
@@ -32,12 +31,12 @@ class CommerceLicenseBillingTest extends CommerceLicenseBase implements Commerce
    * Implements CommerceLicenseBillingUsageInterface::usageDetails().
    */
   public function usageDetails() {
+    $bandwidth_usage = commerce_license_billing_current_usage($this, 'bandwidth');
     $env_usage = commerce_license_billing_current_usage($this, 'environments');
-    $storage_usage = commerce_license_billing_current_usage($this, 'storage');
 
-    $details = t('Environments: @environments', array('@environments' => $env_usage));
+    $details = t('Bandwidth: @bandwidth GB', array('@bandwidth' => $bandwidth_usage));
     $details .= '<br />';
-    $details .= t('Storage: @storage MB', array('@storage' => $storage_usage));
+    $details .= t('Environments: @environments', array('@environments' => $env_usage));
     return $details;
   }
 

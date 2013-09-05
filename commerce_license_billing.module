@@ -558,8 +558,8 @@ function commerce_license_billing_usage_clear($license, $group = NULL) {
 /**
  * Returns the current usage for the provided license and usage group.
  *
- * If the usage group is of type 'total', the total usage is returned.
- * If the usage group is of type 'average', the last reported usage is returned.
+ * If the usage group is of type 'counter', the total usage is returned.
+ * If the usage group is of type 'gauge', the last reported usage is returned.
  *
  * @param  $license
  *   The license entity.
@@ -580,12 +580,12 @@ function commerce_license_billing_current_usage($license, $group) {
     ':license_id' => $license->license_id,
     ':group' => $group,
   );
-  if ($usage_group['type'] == 'total') {
+  if ($usage_group['type'] == 'counter') {
     $usage = db_query("SELECT SUM(quantity) FROM {cl_billing_usage}
                     WHERE license_id = :license_id AND usage_group = :group
                       GROUP BY license_id, usage_group", $data)->fetchColumn();
   }
-  elseif ($usage_group['type'] == 'average') {
+  elseif ($usage_group['type'] == 'gauge') {
     $usage = db_query("SELECT quantity FROM {cl_billing_usage}
                     WHERE license_id = :license_id AND usage_group = :group
                       ORDER BY start DESC LIMIT 1", $data)->fetchColumn();
