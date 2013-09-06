@@ -626,6 +626,7 @@ function commerce_license_billing_usage_list($license, $group) {
  * Fields:
  * - cl_billing_cycle_type: an entityreference field pointing to the
  *   billing cycle type.
+ * - cl_billing_type: an options field for selecting prepaid or postpaid.
  */
 function commerce_license_billing_configure_product_types() {
   $field = field_info_field('cl_billing_cycle_type');
@@ -643,28 +644,63 @@ function commerce_license_billing_configure_product_types() {
     );
     field_create_field($field);
   }
-
   foreach (commerce_license_product_types() as $type_name) {
-    $license_type_instance = field_info_instance('commerce_product', 'commerce_license_type', $type_name);
-    $field_instances['cl_billing_cycle_type'] = array(
-      'field_name' => 'cl_billing_cycle_type',
+    $instance = field_info_instance('commerce_product', 'cl_billing_cycle_type', $type_name);
+    if (empty($instance)) {
+      $license_type_instance = field_info_instance('commerce_product', 'commerce_license_type', $type_name);
+      $instance = array(
+        'field_name' => 'cl_billing_cycle_type',
+        'entity_type' => 'commerce_product',
+        'bundle' => $type_name,
+        'label' => 'License billing cycle type',
+        'required' => FALSE,
+        'widget' => array(
+          'type' => 'options_select',
+          'module' => 'options',
+          // Make sure that this field is shown right after the license type.
+          'weight' => $license_type_instance['widget']['weight'] + 1,
+        ),
+      );
+      field_create_instance($instance);
+    }
+  }
+
+  $field = field_info_field('cl_billing_type');
+  if (empty($field)) {
+    $field = array(
+      'field_name' => 'cl_billing_type',
+      'type' => 'list_text',
       'entity_type' => 'commerce_product',
-      'bundle' => $type_name,
-      'label' => 'License billing cycle type',
-      'required' => FALSE,
-      'widget' => array(
-        'type' => 'options_select',
-        'module' => 'options',
-        // Make sure that this field is shown right after the license type.
-        'weight' => $license_type_instance['widget']['weight'] + 1,
+      'cardinality' => 1,
+      'translatable' => 0,
+      'module' => 'list',
+      'settings' => array(
+        'allowed_values' => array(
+          'prepaid' => 'Prepaid',
+          'postpaid' => 'Postpaid'
+        ),
       ),
     );
-
-    foreach ($field_instances as $field_name => $field_instance) {
-      $instance = field_info_instance('commerce_product', $field_name, $type_name);
-      if (empty($instance)) {
-        field_create_instance($field_instance);
-      }
+    field_create_field($field);
+  }
+  foreach (commerce_license_product_types() as $type_name) {
+    $instance = field_info_instance('commerce_product', 'cl_billing_type', $type_name);
+    if (empty($instance)) {
+      $license_type_instance = field_info_instance('commerce_product', 'commerce_license_type', $type_name);
+      $instance = array(
+        'field_name' => 'cl_billing_type',
+        'entity_type' => 'commerce_product',
+        'bundle' => $type_name,
+        'label' => 'License billing type',
+        'required' => TRUE,
+        'widget' => array(
+          'type' => 'options_buttons',
+          'module' => 'options',
+          // Make sure that this field is shown right after the billing cycle type.
+          'weight' => $license_type_instance['widget']['weight'] + 1,
+        ),
+      );
+      field_create_instance($instance);
     }
   }
 }

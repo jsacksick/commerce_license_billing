@@ -10,8 +10,8 @@ Getting started
 ---------------
 1. Go to admin/config/licenses/billing-cycle-types and add a billing cycle type.
 2. Create a product, select a license type, then below select your billing cycle type
-and payment type (prepaid or postpaid).
-3. Checkout the product. If you selected postpaid as the payment type, your product
+and billing type (prepaid or postpaid).
+3. Checkout the product. If you selected postpaid as the billing type, your product
 will be free.
 4. A billing cycle has now been opened (with the current start date, and the end date
 depending on your billing cycle type settings), along with a matching recurring order.
@@ -59,7 +59,7 @@ Plan-based billing
 Each license has one plan at a given point of time, which is the referenced product.
 
 Different plans are represented by different products, all pointing to the
-same license type / billing cycle type / payment type.
+same license type / billing cycle type / billing type.
 The module tracks plan changes in the cl_product_history table, that has a
 start and an end date for each license and product_id.
 So if the user switches $license->product_id from id: 10 ("Small plan") to
@@ -110,7 +110,7 @@ duration).
 
 There are two types of usage groups: counter and gauge.
 
-- The counter tracks usage over time, and is always charged for in total. 
+- The counter tracks usage over time, and is always charged for in total.
 For example if the following bandwidth usage was reported:
 `Jan 1st - Jan 15th; 1024` and `Jan 15th - Jan 31st; 128`, there
 will be one line item, charging for 1052mb of usage.
@@ -157,7 +157,7 @@ Fields and bundles
 The module creates the following fields on any product type that's license enabled:
 
 - `cl_billing_cycle_type` - Reference to the billing cycle type.
-- `cl_payment_type` - The payment type.
+- `cl_billing_type` - The billing type (prepaid / postpaid).
 
 It provides the recurring line item type with the following additional fields:
 

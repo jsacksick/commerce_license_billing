@@ -129,16 +129,6 @@ function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_
     '#disabled' => $is_new && $user->uid != 1,
     '#weight' => -9,
   );
-  $form['prepaid'] = array(
-    '#type' => 'select',
-    '#title' => t('Payment type'),
-    '#default_value' => !empty($billing_cycle_type->prepaid),
-    '#options' => array(
-      0 => t('Postpaid'),
-      1 => t('Prepaid'),
-    ),
-    '#weight' => 398,
-  );
 
   // Add the field related form elements.
   $form['#entity_type'] = 'cl_billing_cycle_type';

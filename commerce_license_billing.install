@@ -71,13 +71,6 @@ function commerce_license_billing_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
-      'prepaid' => array(
-        'type' => 'int',
-        'not null' => TRUE,
-        'default' => 1,
-        'size' => 'tiny',
-        'description' => 'Whether the generated billing cycles will be prepaid or postpaid.',
-      ),
       'status' => array(
         'description' => 'The exportable status of the billing cycle type.',
         'type' => 'int',
