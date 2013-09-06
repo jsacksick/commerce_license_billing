@@ -9,20 +9,21 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
    * Implements EntityBundlePluginProvideFieldsInterface::fields().
    */
   static function fields() {
-    $fields['pce_periodicity']['field'] = array(
+    $fields['pce_period']['field'] = array(
       'type' => 'list_text',
       'cardinality' => '1',
       'translatable' => '0',
       'settings' => array(
         'allowed_values' => array(
-          'daily' => 'Daily',
-          'weekly' => 'Weekly',
-          'monthly' => 'Monthly',
+          'day' => 'Day',
+          'week' => 'Week',
+          'month' => 'Month',
         ),
       ),
     );
-    $fields['pce_periodicity']['instance'] = array(
-      'label' => 'Periodicity',
+    $fields['pce_period']['instance'] = array(
+      'label' => 'Period',
+      'description' => 'Determines the length of a generated billing cycle.',
       'required' => TRUE,
       'widget' => array(
         'module' => 'options',
@@ -69,34 +70,34 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
    *   A cl_billing_cycle entity.
    */
   public function getBillingCycle($start = REQUEST_TIME) {
-    $periodicity = $this->wrapper->pce_periodicity->value();
+    $period = $this->wrapper->pce_period->value();
     if (!$this->wrapper->pce_async->value()) {
       // This is a synchronous billing cycle, normalize the start timestamp.
-      switch ($periodicity) {
-        case 'daily':
+      switch ($period) {
+        case 'day':
           $start = strtotime('today');
           break;
-        case 'weekly':
+        case 'week':
           $day = date('d', $start);
           $month = date('m', $start);
           $year = date('Y', $start);
           $start = strtotime('this week', mktime(0, 0, 0, $month, $day, $year));
           break;
-        case 'monthly':
+        case 'month':
           $start = strtotime(date('F Y', $start));
           break;
       }
     }
     // Calculate the end timestamp.
-    $periodicity_mapping = array(
-      'daily' => '+1 day',
-      'weekly' => '+1 week',
-      'monthly' => '+1 month',
+    $period_mapping = array(
+      'day' => '+1 day',
+      'week' => '+1 week',
+      'month' => '+1 month',
     );
     // The 1 is substracted to make sure that the billing cycle ends 1s before
     // the next one starts (January 31st 23:59:59, for instance, with the
     // next one starting on February 1st 00:00:00).
-    $end = strtotime($periodicity_mapping[$periodicity], $start) - 1;
+    $end = strtotime($period_mapping[$period], $start) - 1;
 
     // Try to find an existing billing cycle matching our parameters.
     $query = new EntityFieldQuery;
@@ -136,9 +137,9 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
    */
   public function getBillingCycleLabel($start, $end) {
     $async = $this->wrapper->pce_async->value();
-    $periodicity = $this->wrapper->pce_periodicity->value();
+    $period = $this->wrapper->pce_period->value();
     // Example: January 15th 2013
-    if ($periodicity == 'daily') {
+    if ($period == 'day') {
       return date('F jS Y', $end);
     }
 
@@ -147,11 +148,11 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
       return date('F jS Y', $start) . ' - ' . date('F jS Y', $end);
     }
     else {
-      if ($periodicity == 'weekly') {
+      if ($period == 'week') {
         // Example: January 1st 2013 - January 7th 2013.
         return date('F jS Y', $start) . ' - ' . date('F jS Y', $end);
       }
-      elseif ($periodicity == 'monthly') {
+      elseif ($period == 'month') {
         // Example: January 2013.
         return date('F Y');
       }
