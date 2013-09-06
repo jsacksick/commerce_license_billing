@@ -8,14 +8,14 @@ Dependencies: Commerce License, Bundleswitcher, Commerce Card on File.
 
 Getting started
 ---------------
-1) Go to admin/config/licenses/billing-cycle-types and add a billing cycle type.
-2) Create a product, select a license type, then below select your billing cycle type
+1. Go to admin/config/licenses/billing-cycle-types and add a billing cycle type.
+2. Create a product, select a license type, then below select your billing cycle type
 and payment type (prepaid or postpaid).
-3) Checkout the product. If you selected postpaid as the payment type, your product
+3. Checkout the product. If you selected postpaid as the payment type, your product
 will be free.
-4) A billing cycle has now been opened (with the current start date, and the end date
+4. A billing cycle has now been opened (with the current start date, and the end date
 depending on your billing cycle type settings), along with a matching recurring order.
-5) When the billing cycle expires, the recurring order will be closed and charged for
+5. When the billing cycle expires, the recurring order will be closed and charged for
 using Commerce Card on File, and a new billing cycle & order will be opened.
 
 Prepaid billing
