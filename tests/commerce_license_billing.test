@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * @file
+ * Unit tests for the Commerce License Billing module.
+ */
+
+/**
+ * Test the product and product type CRUD.
+ */
+class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
+
+  protected $profile = 'testing';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Commerce License Billing',
+      'description' => 'Test recurring billing for licenses.',
+      'group' => 'Commerce License',
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('commerce_license_billing', 'commerce_license_billing_test'));
+  }
+
+  /**
+   * Test the creation of the necessary products.
+   */
+  public function testUsageProducts() {
+    $skus = array('BILLING-TEST-ENV', 'BILLING-TEST-BANDWIDTH');
+
+    foreach ($skus as $sku) {
+      $product = commerce_product_load_by_sku($sku);
+      $this->assertTrue(!empty($product), t('The product with the sku @sku has been correctly created', array('@sku' => $sku)));
+    }
+  }
+
+}

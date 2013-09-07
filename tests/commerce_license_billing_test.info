@@ -5,3 +5,4 @@ version = VERSION
 core = 7.x
 hidden = TRUE
 dependencies[] = commerce_license_billing
+dependencies[] = commerce_product_ui
