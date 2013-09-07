@@ -25,8 +25,7 @@ Prepaid products are paid up front.
 That means that if a customer registers on April 1st, he will immediately pay the
 monthly fee for April. On the first day of May, he will be charged for the
 april usage (if any), and the monthly fee for May. If on May 15h he cancels
-his subscription, on the first day of June he will only pay the prorated
-usage for May.
+his subscription, on the first day of June he will only pay the usage for May.
 
 The other half of the May monthly fee will not be refunded, since that is
 not currently implemented (a common strategy being to award the customer
@@ -39,7 +38,7 @@ Postpaid products are paid at the end of the billing cycle.
 That means that if the customer registers on April 1st, his order is free and he pays
 nothing. On the first day of May, he will be charged for the April monthly fee,
 and the april usage (if any). If on May 15th he cancels his subscription, on the
-first day of June he will pay the prorated montly fee for May, and the prorated usage
+first day of June he will pay the prorated montly fee for May, and the usage
 for May.
 
 Prorated payments
@@ -122,6 +121,8 @@ there will be two prorated line items, charging for 2 and 4 environments.
 The gauge type also allows for open-ended usage (`immediate => TRUE`), in which
 case it is carried over into the next billing cycles.
 
+Note that the gauge usage is prorated, and the counter usage isn't.
+
 A usage group can also define `free_quantity`, the quantity provided for free
 with the license. Only usage exceeding this quantity will be charged for.
 For counters this means that the free quantity is subtracted from the total quantity.
@@ -139,6 +140,11 @@ Recurring order refresh
 -----------------------
 The recurring order is refreshed each time it is loaded (`hook_commerce_order_load()`),
 updating the line items (quantities, prices) based on the latest plan history and usage.
+
+The start and end timestamps on the line items are maintained.
+For counter usage, they match the start and end of the billing cycle, since
+counter usage is not prorated. For gauge usage and plans, it reflects the exact
+period that is used for prorating.
 
 Billing cycle types
 -------------------
