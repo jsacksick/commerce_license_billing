@@ -37,6 +37,7 @@ function _commerce_license_billing_resource_delete($license_id) {
   try {
     $license->status = COMMERCE_LICENSE_REVOKED;
     $license->save();
+    return services_error(t('License revoked'), 204);
   }
   catch (Exception $e) {
     return services_error($e->getMessage(), 500);
