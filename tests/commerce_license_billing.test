@@ -12,6 +12,20 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
 
   protected $profile = 'testing';
 
+  /**
+   * The test prepaid product.
+   *
+   * @var object
+   */
+  protected $prepaid_product;
+
+  /**
+   * The test postpaid product.
+   *
+   * @var object
+   */
+  protected $postpaid_product;
+
   public static function getInfo() {
     return array(
       'name' => 'Commerce License Billing',
@@ -21,19 +35,44 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   }
 
   function setUp() {
-    parent::setUp(array('commerce_license_billing', 'commerce_license_billing_test'));
+    $modules = parent::setUpHelper('all');
+    $modules[] = 'commerce_license_billing_test';
+    parent::setUp($modules);
+
+    $this->prepaid_product = commerce_product_load_by_sku('BILLING-TEST-ENV');
+    $this->postpaid_product = commerce_product_load_by_sku('BILLING-TEST-BANDWIDTH');
   }
 
   /**
    * Test the creation of the necessary products.
    */
   public function testUsageProducts() {
-    $skus = array('BILLING-TEST-ENV', 'BILLING-TEST-BANDWIDTH');
-
-    foreach ($skus as $sku) {
-      $product = commerce_product_load_by_sku($sku);
-      $this->assertTrue(!empty($product), t('The product with the sku @sku has been correctly created', array('@sku' => $sku)));
+    $products = array(
+      'prepaid' => $this->prepaid_product,
+      'postpaid' => $this->postpaid_product,
+    );
+    foreach ($products as $billing_type => $product) {
+      $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+      $t_variables = array(
+        '@sku' => $product->sku,
+        '@billing_type' => $billing_type,
+      );
+      $this->assertTrue(isset($product->product_id), t('The product with the sku @sku has been correctly created', $t_variables));
+      $this->assertEqual($product_wrapper->cl_billing_type->value(), $billing_type, t('The product with the sku @sku has the correct billing type (@billing_type) attached.', $t_variables));
     }
+  }
+
+  /**
+   * Test the checkout of an order containing a postpaid product.
+   */
+  public function testPostPaidProductOrder() {
+    $products = array(
+      $this->postpaid_product->product_id => 2048,
+    );
+    $order = $this->createDummyOrder(1, $products);
+    $this->assertTrue(!empty($order->order_id), t('Dummy order containing the post paid product has been successfully created.'));
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+    $this->assertEqual($order_wrapper->commerce_order_total->value(), 0, t('The dummy order total containing a post payment product is 0.'));
   }
 
 }
