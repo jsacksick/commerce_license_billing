@@ -414,7 +414,7 @@ function commerce_license_billing_order_refresh($order) {
     }
 
     // Group the old line items by their license id.
-    $old_line_items[$license_id][] = $line_item_wrapper->value();
+    $old_line_items[$license_id][] = $line_item_wrapper;
   }
 
   $order_changed = FALSE;

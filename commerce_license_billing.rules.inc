@@ -61,9 +61,11 @@ function commerce_license_billing_rules_action_info() {
  * Rules condition callback: check if the product is postpaid.
  */
 function commerce_license_billing_product_postpaid_condition($product) {
+  // Only return TRUE if the product has a billing cycle type selected
+  // (meaning that it has enabled billing).
   if (!empty($product->cl_billing_cycle_type)) {
     $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
-    if ($product_wrapper->cl_billing_cycle_type->prepaid->value() == 0) {
+    if ($product_wrapper->cl_billing_type->value() == 'postpaid') {
       return TRUE;
     }
   }
