@@ -274,6 +274,11 @@ function commerce_license_billing_create_recurring_order($order) {
     $billing_cycle_type = $billing_cycle_types[$billing_cycle_type_id];
     $billing_cycle = $billing_cycle_type->getBillingCycle();
 
+    // Open the product history.
+    foreach ($licenses as $license) {
+      commerce_license_billing_product_history_open($license, $license->product_id);
+    }
+
     // Check if there's an existing order attached to that billing cycle.
     $query = new EntityFieldQuery();
     $query
@@ -406,32 +411,20 @@ function commerce_license_billing_generate_line_items($billing_cycle, $license, 
 }
 
 /**
- * Implements hook_commerce_license_insert().
- *
- * Maintains the license product history for licenses that are created as
- * active right away.
- */
-function commerce_license_billing_commerce_license_insert($license) {
-  if ($license->status == COMMERCE_LICENSE_ACTIVE) {
-    // The license was just granted.
-    commerce_license_billing_product_history_open($license, $license->product_id);
-  }
-}
-
-/**
  * Implements hook_commerce_license_update().
  *
  * Maintains the license product history.
  */
 function commerce_license_billing_commerce_license_update($license) {
+  $product = $license->wrapper->product->value();
+  // No billing cycle type selected, this license is not billable.
+  if (empty($product->cl_billing_cycle_type)) {
+    return;
+  }
+
   $status_changed = ($license->status > $license->original->status);
   $product_changed = ($license->product_id != $license->original->product_id);
-
-  if ($license->status == COMMERCE_LICENSE_ACTIVE && $status_changed) {
-    // The license was just granted.
-    commerce_license_billing_product_history_open($license, $license->product_id);
-  }
-  elseif ($license->status == COMMERCE_LICENSE_REVOKED && $status_changed) {
+  if ($license->status == COMMERCE_LICENSE_REVOKED && $status_changed) {
     // The license was just revoked.
     commerce_license_billing_product_history_close($license, $license->product_id);
   }
