@@ -491,6 +491,7 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
   $products = commerce_product_load_multiple($product_ids);
   $charges = array();
 
+  // Charge for the plans (current one, and any previous ones).
   foreach ($history as $history_entry) {
     $product = $products[$history_entry['product_id']];
     $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
@@ -506,12 +507,15 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
     );
   }
 
+  // Charge for usage, if the license type supports it.
   if ($license instanceof CommerceLicenseBillingUsageInterface) {
     foreach ($license->usageGroups() as $group_name => $group_info) {
       $product = commerce_product_load_by_sku($group_info['product']);
       $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
       if ($group_info['type'] == 'counter') {
+        // Counter usage is charged in total for the entire billing cycle,
+        // so calculate the total and substract the free quantity from it.
         $current_usage = commerce_license_billing_current_usage($license, $group_name);
         $current_usage -= $group_info['free_quantity'];
         if ($current_usage >= 1) {
@@ -519,16 +523,16 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
             'commerce_product' => $product,
             'quantity' => $current_usage,
             'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-            'cl_billing_start' => $usage_entry['start'],
-            'cl_billing_end' => $usage_entry['end'],
+            'cl_billing_start' => $billing_cycle->start,
+            'cl_billing_end' => $billing_cycle->end,
             'match' => array('commerce_product'),
           );
         }
       }
       else {
+        // Charge for each reported gauge usage. Ignore any usage that is free.
         $usage_list = commerce_license_billing_usage_list($license, $group_name);
         foreach ($usage_list as $usage_entry) {
-          // Ignore the values that are free.
           if ($usage_entry['quantity'] != $group_info['free_quantity']) {
             $charges[] = array(
               'commerce_product' => $product,
@@ -536,7 +540,7 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
               'commerce_unit_price' => $product_wrapper->commerce_price->value(),
               'cl_billing_start' => $usage_entry['start'],
               'cl_billing_end' => $usage_entry['end'],
-              'match' => array('quantity', 'cl_billing_start', 'cl_billing_end'),
+              'match' => array('commerce_product', 'cl_billing_start', 'cl_billing_end'),
               'prorate' => TRUE,
             );
           }
@@ -553,6 +557,15 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
 
 /**
  * Adjusts the collected charges for the given billing cycle.
+ *
+ * If the start timestamp is from before the billing cycle was opened
+ * (due to plans or usage carried over from previous cycles), the
+ * billing cycle's start timestamp is taken instead.
+ * If the end timestamp is missing (because it's charging an open-ended plan or
+ * gauge usage), the billing cycle's end timestamp is taken instead.
+ *
+ * After the timestamps have been adjusted, the amounts are prorated if needed,
+ * and any charges with prorated amounts smaller than 0.01 are dropped.
  *
  * @param $charges
  *   The charges array provided by commerce_license_billing_collect_charges().
