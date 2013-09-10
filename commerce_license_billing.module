@@ -336,11 +336,6 @@ function commerce_license_billing_create_recurring_order($order) {
  *   The newly created and saved line item.
  */
 function commerce_license_billing_generate_base_line_item($license, $billing_cycle, $order_id) {
-  // The first time an order is saved, entity_load_unchanged() in the controller
-  // leads to this function being called, with no line items to work on.
-  if (empty($order->commerce_line_items)) {
-    return;
-  }
   $product_wrapper = $license->wrapper->product;
   // Charge for the base product, there's no usage at this point.
   $line_item = commerce_line_item_new('recurring', $order_id);
@@ -401,6 +396,12 @@ function commerce_license_billing_commerce_order_load($orders) {
  *   The order entity.
  */
 function commerce_license_billing_order_refresh($order) {
+  // The first time an order is saved, entity_load_unchanged() in the controller
+  // leads to this function being called, with no line items to work on.
+  if (empty($order->commerce_line_items)) {
+    return;
+  }
+
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
   $billing_cycle = $order_wrapper->cl_billing_cycle->value();
   $licenses = array();
