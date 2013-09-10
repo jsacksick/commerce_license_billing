@@ -34,6 +34,20 @@ function commerce_license_billing_default_rules_configuration() {
       ]
     }
   }');
+  $items['commerce_license_billing_create_recurring_order'] = entity_import('rules_config', '{ "commerce_license_billing_create_recurring_order" : {
+      "LABEL" : "Create a recurring order",
+      "PLUGIN" : "reaction rule",
+      "WEIGHT" : "10",
+      "REQUIRES" : [ "commerce_license_billing", "commerce_payment" ],
+      "ON" : [ "commerce_payment_order_paid_in_full" ],
+      "IF" : [
+        { "commerce_license_billing_order_elligible" : { "commerce_order" : [ "commerce_order" ] } }
+      ],
+      "DO" : [
+        { "commerce_license_billing_create_recurring_order" : { "commerce_order" : [ "commerce_order" ] } }
+      ]
+    }
+  }');
 
   return $items;
 }

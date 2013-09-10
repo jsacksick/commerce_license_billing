@@ -51,7 +51,7 @@ function commerce_license_billing_rules_action_info() {
     ),
     'group' => t('Commerce License Billing'),
     'callbacks' => array(
-      'execute' => 'commerce_license_billing_rules_create_recurring_order',
+      'execute' => 'commerce_license_billing_create_recurring_order_action',
     ),
   );
   return $actions;
@@ -82,18 +82,23 @@ function commerce_license_billing_order_elligible_condition($order) {
     return FALSE;
   }
 
+  // Make sure the order has at least one license & billing cycle type selected.
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
   foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
-    if (isset($line_item_wrapper->commerce_license)) {
-      return TRUE;
+    if (!empty($line_item_wrapper->commerce_license)) {
+      $product = $line_item_wrapper->commerce_product->value();
+      if (!empty($product->cl_billing_cycle_type)) {
+        return TRUE;
+      }
     }
   }
+
   return FALSE;
 }
 
 /**
  * Rules action callback: create a recurring order.
  */
-function commerce_license_billing_rules_create_recurring_order($order) {
+function commerce_license_billing_create_recurring_order_action($order) {
   commerce_license_billing_create_recurring_order($order);
 }
