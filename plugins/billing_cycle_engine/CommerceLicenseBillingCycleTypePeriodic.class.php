@@ -65,11 +65,15 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
    *
    * @param $start
    *   The unix timestamp when the billing cycle needs to start.
+   * @param $save
+   *   Whether to save the created billing cycle entity.
+   *   Passing FALSE allows an unsaved billing cycle entity to be returned
+   *   for estimation purposes.
    *
    * @return
    *   A cl_billing_cycle entity.
    */
-  public function getBillingCycle($start = REQUEST_TIME) {
+  public function getBillingCycle($start = REQUEST_TIME, $save = TRUE) {
     $period = $this->wrapper->pce_period->value();
     if (!$this->wrapper->pce_async->value()) {
       // This is a synchronous billing cycle, normalize the start timestamp.
@@ -118,7 +122,9 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
       $billing_cycle->status = 1;
       $billing_cycle->start = $start;
       $billing_cycle->end = $end;
-      $billing_cycle->save();
+      if ($save) {
+        $billing_cycle->save();
+      }
     }
 
     return $billing_cycle;
