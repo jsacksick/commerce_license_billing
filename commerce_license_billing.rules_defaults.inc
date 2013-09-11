@@ -26,9 +26,11 @@ function commerce_license_billing_default_rules_configuration() {
         { "commerce_license_billing_product_is_postpaid" : { "commerce_product" : [ "commerce-line-item:commerce-product" ] } }
       ],
       "DO" : [
-        { "data_set" : {
-            "data" : [ "commerce-line-item:commerce-unit-price:amount" ],
-            "value" : "0"
+        { "commerce_line_item_unit_price_amount" : {
+            "commerce_line_item" : [ "commerce_line_item" ],
+            "amount" : "0",
+            "component_name" : "base_price",
+            "round_mode" : "0"
           }
         }
       ]
