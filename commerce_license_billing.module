@@ -199,6 +199,7 @@ function commerce_license_billing_flush_caches() {
  * Implements hook_cron().
  */
 function commerce_license_billing_cron() {
+  return;
   $query = new EntityFieldQuery();
   $query->entityCondition('entity_type', 'cl_billing_cycle')
     ->propertyCondition('status', 1)
