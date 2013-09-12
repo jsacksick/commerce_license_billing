@@ -217,7 +217,7 @@ function commerce_license_billing_cron() {
   if (!empty($results['cl_billing_cycle'])) {
     $billing_cycle_ids = array_keys($results['cl_billing_cycle']);
     foreach (array_keys($results['cl_billing_cycle']) as $billing_cycle_id) {
-      $queue = DrupalQueue::get('commerce_license_billing_close_cycle');
+      $queue = DrupalQueue::get('commerce_license_billing_cycle_expiration');
       $task = array(
         'billing_cycle_id' => $billing_cycle_id,
         'title' => 'Billing cycle #' . $billing_cycle_id,
@@ -232,16 +232,16 @@ function commerce_license_billing_cron() {
  */
 function commerce_license_billing_advanced_queue_info() {
   return array(
-    'commerce_license_billing_close_cycle' => array(
-      'worker callback' => 'commerce_license_billing_close_cycle',
+    'commerce_license_billing_cycle_expiration' => array(
+      'worker callback' => 'commerce_license_billing_cycle_expiration_queue_process',
     ),
   );
 }
 
 /**
- * Advanced queue worker callback.
+ * Worker callback for expiring billing cycles.
  */
-function commerce_license_billing_close_cycle($item) {
+function commerce_license_billing_cycle_expiration_queue_process($item) {
   $billing_cycle_id = $item->data['billing_cycle_id'];
   $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
 
@@ -256,29 +256,30 @@ function commerce_license_billing_close_cycle($item) {
     // No order found (which should never happen), so nothing else to be done.
     return;
   }
-  $order_id = key($results['commerce_order']);
+  $order_id = key($result['commerce_order']);
   $order = commerce_order_load($order_id);
 
   // Gather licenses.
   $licenses = commerce_license_billing_get_recurring_order_licenses($order);
   $can_close = TRUE;
   foreach ($licenses as $license) {
-    // Do gap checking here for each license's usage, set $can_close.
-    $usage = commerce_license_billing_usage_list($license);
-    $billing_cycle_duration = $billing_cycle->end - $billing_cycle->start;
-    foreach ($usage as $usage_entry) {
-      if ($usage_entry['start'] <= $billing_cycle->start) {
-        $usage_entry['start'] = $billing_cycle->start;
+    if ($license instanceof CommerceLicenseBillingUsageInterface) {
+      // Do gap checking to ensure usage has been reported for the entire cycle.
+      $usage = commerce_license_billing_usage_list($license);
+      $remaining_gap = ($billing_cycle->end - $billing_cycle->start);
+      foreach ($usage as $usage_entry) {
+        if ($usage_entry['start'] <= $billing_cycle->start) {
+          $usage_entry['start'] = $billing_cycle->start;
+        }
+        if (!$usage_entry['end']) {
+          $usage_entry['end'] = $billing_cycle->end;
+        }
+        $remaining_gap -= ($usage_entry['end'] - $usage_entry['start']);
       }
-      if (!$usage_entry['end']) {
-        $usage_entry['end'] = $billing_cycle->end;
-      }
-      $duration = $usage_entry['end'] - $usage_entry['start'];
-      $billing_cycle_duration -= $duration;
-    }
 
-    if ($billing_cycle_duration > 0) {
-      $can_close = FALSE;
+      if ($remaining_gap > 0) {
+        $can_close = FALSE;
+      }
     }
   }
 
@@ -333,7 +334,7 @@ function commerce_license_billing_get_recurring_order_licenses($order) {
   foreach ($wrapper->commerce_line_items as $line_item_wrapper) {
     if (isset($line_item_wrapper->cl_billing_license)) {
       $license_id = $line_item_wrapper->cl_billing_license->raw();
-      if (!$licenses[$license_id]) {
+      if (!isset($licenses[$license_id])) {
         $licenses[$license_id] = $line_item_wrapper->cl_billing_license->value();
       }
     }
@@ -513,7 +514,7 @@ function commerce_license_billing_commerce_order_load($orders) {
 
   foreach ($orders as $order) {
     // Refresh only if this is a recurring order and it hasn't been refreshed.
-    if (!isset($refreshed[$order->order_id]) && in_array($order->status, $recurring_statuses) {
+    if (!isset($refreshed[$order->order_id]) && in_array($order->status, $recurring_statuses)) {
       // Refresh the order and add its ID to the refreshed array.
       $refreshed[$order->order_id] = TRUE;
       commerce_license_billing_order_refresh($order);
@@ -922,19 +923,20 @@ function commerce_license_billing_current_usage($license, $group) {
  * @return
  *   An array of usage records.
  */
-function commerce_license_billing_usage_list($license, $group) {
+function commerce_license_billing_usage_list($license, $group = NULL) {
   $usage_groups = $license->usageGroups();
-  if (!isset($usage_groups[$group])) {
+  if ($group && !isset($usage_groups[$group])) {
     throw new Exception('Invalid usage group specified for commerce_license_billing_usage_list().');
   }
 
-  $data = array(
-    ':license_id' => $license->license_id,
-    ':group' => $group,
-  );
-  $usage = db_query("SELECT * FROM {cl_billing_usage}
-                      WHERE license_id = :license_id AND usage_group = :group", $data)->fetchAll(PDO::FETCH_ASSOC);
-  return (array) $usage;
+  $query = db_select('cl_billing_usage', 'bu');
+  $query
+    ->fields('bu')
+    ->condition('license_id', $license->license_id);
+  if ($group) {
+    $query->condition('usage_group', $group);
+  }
+  return $query->execute()->fetchAll(PDO::FETCH_ASSOC);
 }
 
 /**
