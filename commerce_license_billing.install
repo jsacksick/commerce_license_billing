@@ -20,8 +20,8 @@ function commerce_license_billing_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
-      'status' => array(
-        'description' => 'Whether the billing cycle is open or closed.',
+      'uid' => array(
+        'description' => 'The {users}.uid that created this billing cycle belongs to.',
         'type' => 'int',
         'not null' => TRUE,
         'default' => 0,
@@ -38,8 +38,17 @@ function commerce_license_billing_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
+      'status' => array(
+        'description' => 'Whether the billing cycle is open or closed.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
     ),
     'primary key' => array('billing_cycle_id'),
+    'indexes' => array(
+      'uid' => array('uid'),
+    ),
   );
   $schema['cl_billing_cycle_type'] = array(
     'description' => 'The base table for the cl_billing_cycle_type entity type.',

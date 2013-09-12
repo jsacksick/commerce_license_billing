@@ -58,11 +58,13 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
   }
 
   /**
-   * Returns a billing cycle entity with the provided start time.
+   * Returns the user's billing cycle with the provided start time.
    *
    * If an existing billing cycle matches the expected start and end, it will
-   * be returned instead.
+   * be returned. Otherwise, a new one will be created.
    *
+   * @param $uid
+   *   The uid of the user.
    * @param $start
    *   The unix timestamp when the billing cycle needs to start.
    * @param $save
@@ -73,7 +75,7 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
    * @return
    *   A cl_billing_cycle entity.
    */
-  public function getBillingCycle($start = REQUEST_TIME, $save = TRUE) {
+  public function getBillingCycle($uid, $start = REQUEST_TIME, $save = TRUE) {
     $period = $this->wrapper->pce_period->value();
     if (!$this->wrapper->pce_async->value()) {
       // This is a synchronous billing cycle, normalize the start timestamp.
@@ -108,26 +110,44 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
     $query
       ->entityCondition('entity_type', 'cl_billing_cycle')
       ->entityCondition('bundle', $this->name)
+      ->propertyCondition('uid', $uid)
       ->propertyCondition('start', $start)
       ->propertyCondition('end', $end);
     $result = $query->execute();
     if ($result) {
-      $billing_cycle_ids = array_keys($result['cl_billing_cycle']);
-      $billing_cycle_id = reset($billing_cycle_ids);
+      $billing_cycle_id = key($result['cl_billing_cycle']);
       $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
     }
     else {
       // No existing billing cycle found. Create a new one.
       $billing_cycle = entity_create('cl_billing_cycle', array('type' => $this->name));
-      $billing_cycle->status = 1;
+      $billing_cycle->uid = $uid;
       $billing_cycle->start = $start;
       $billing_cycle->end = $end;
+      $billing_cycle->status = 1;
       if ($save) {
         $billing_cycle->save();
       }
     }
 
     return $billing_cycle;
+  }
+
+  /**
+   * Returns the user's next billing cycle.
+   *
+   * @param $billing_cycle
+   *   The current billing cycle.
+   * @param $save
+   *   Whether to save the created billing cycle entity.
+   *   Passing FALSE allows an unsaved billing cycle entity to be returned
+   *   for estimation purposes.
+   *
+   * @return
+   *   A cl_billing_cycle entity.
+   */
+  public function getNextBillingCycle($billing_cycle, $save = TRUE) {
+    return $this->getBillingCycle($billing_cycle->uid, $billing_cycle->end + 1, $save);
   }
 
   /**
