@@ -3,6 +3,7 @@ description = Provides advanced recurring billing for licenses.
 package = Commerce (contrib)
 core = 7.x
 configure = admin/commerce/config/license-billing
+dependencies[] = advancedqueue
 dependencies[] = commerce_license
 dependencies[] = commerce_order
 dependencies[] = bundleswitcher
