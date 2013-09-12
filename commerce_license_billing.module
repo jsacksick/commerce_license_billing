@@ -183,6 +183,16 @@ function commerce_license_billing_commerce_order_status_info() {
     'title' => t('Recurring open'),
     'state' => 'recurring',
   );
+  $order_statuses['recurring_pending'] = array(
+    'name' => 'recurring_pending',
+    'title' => t('Recurring pending'),
+    'state' => 'recurring',
+  );
+  $order_statuses['recurring_complete'] = array(
+    'name' => 'recurring_complete',
+    'title' => t('Recurring complete'),
+    'state' => 'recurring',
+  );
   return $order_statuses;
 }
 
@@ -199,17 +209,18 @@ function commerce_license_billing_flush_caches() {
  * Implements hook_cron().
  */
 function commerce_license_billing_cron() {
-  return;
   $query = new EntityFieldQuery();
   $query->entityCondition('entity_type', 'cl_billing_cycle')
     ->propertyCondition('status', 1)
-    ->propertyCondition('expire', REQUEST_TIME, '<');
+    ->propertyCondition('end', REQUEST_TIME, '<=');
   $results = $query->execute();
   if (!empty($results['cl_billing_cycle'])) {
+    $billing_cycle_ids = array_keys($results['cl_billing_cycle']);
     foreach (array_keys($results['cl_billing_cycle']) as $billing_cycle_id) {
       $queue = DrupalQueue::get('commerce_license_billing_close_cycle');
       $task = array(
-        'id' => $billing_cycle_id,
+        'billing_cycle_id' => $billing_cycle_id,
+        'title' => 'Billing cycle #' . $billing_cycle_id,
       );
       $queue->createItem($task);
     }
@@ -231,13 +242,104 @@ function commerce_license_billing_advanced_queue_info() {
  * Advanced queue worker callback.
  */
 function commerce_license_billing_close_cycle($item) {
-  $billing_cycle = entity_load_single('cl_billing_cycle', $item->data['id']);
-  $billing_cycle->status = 0;
-  entity_save('cl_billing_cycle', $billing_cycle);
-  return array(
-    'status' => ADVANCEDQUEUE_STATUS_SUCCESS,
-    'result' => 'Processed Billing cycle' . $item->data['id'],
-  );
+  $billing_cycle_id = $item->data['billing_cycle_id'];
+  $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
+
+  // Load the order for this billing cycle.
+  $query = new EntityFieldQuery;
+  $query
+    ->entityCondition('entity_type', 'commerce_order')
+    ->propertyCondition('status', array('recurring_open'))
+    ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle_id);
+  $result = $query->execute();
+  if (!$result) {
+    // No order found (which should never happen), so nothing else to be done.
+    return;
+  }
+  $order_id = key($results['commerce_order']);
+  $order = commerce_order_load($order_id);
+
+  // Gather licenses.
+  $licenses = commerce_license_billing_get_recurring_order_licenses($order);
+  $can_close = TRUE;
+  foreach ($licenses as $license) {
+    // Do gap checking here for each license's usage, set $can_close.
+    $usage = commerce_license_billing_usage_list($license);
+    $billing_cycle_duration = $billing_cycle->end - $billing_cycle->start;
+    foreach ($usage as $usage_entry) {
+      if ($usage_entry['start'] <= $billing_cycle->start) {
+        $usage_entry['start'] = $billing_cycle->start;
+      }
+      if (!$usage_entry['end']) {
+        $usage_entry['end'] = $billing_cycle->end;
+      }
+      $duration = $usage_entry['end'] - $usage_entry['start'];
+      $billing_cycle_duration -= $duration;
+    }
+
+    if ($billing_cycle_duration > 0) {
+      $can_close = FALSE;
+    }
+  }
+
+  if ($can_close) {
+    // Close the billing cycle.
+    $billing_cycle->start = 0;
+    $billing_cycle->save();
+    // Close the order.
+    $order->status = 'recurring_complete';
+    commerce_order_save($order);
+    // Clean up usage that's now irrelevant.
+    foreach ($licenses as $license) {
+      commerce_license_billing_usage_clear($license);
+    }
+
+    // Open a new billing cycle just after the end of the previous one.
+    $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
+    $next_billing_cycle = $billing_cycle_type->getBillingCycle($billing_cycle->end + 1);
+    // Create a new recurring order.
+    commerce_license_billing_create_recurring_order($order, $next_billing_cycle, $licenses);
+
+    return array(
+      'status' => ADVANCEDQUEUE_STATUS_SUCCESS,
+      'result' => 'Closed the billing cycle.',
+    );
+  }
+  else {
+    if ($order->status != 'recurring_pending') {
+      $order->status = 'recurring_pending';
+      commerce_order_save($order);
+    }
+
+    return array(
+      'status' => ADVANCEDQUEUE_STATUS_FAILURE,
+      'result' => 'Incomplete usage information.',
+    );
+  }
+}
+
+/**
+ * Returns all licenses found on a recurring order.
+ *
+ * @param $order
+ *   The order entity.
+ *
+ * @return
+ *   An array of all found licenses, keyed by license id.
+ */
+function commerce_license_billing_get_recurring_order_licenses($order) {
+  $licenses = array();
+  $wrapper = entity_metadata_wrapper('commerce_order', $order);
+  foreach ($wrapper->commerce_line_items as $line_item_wrapper) {
+    if (isset($line_item_wrapper->cl_billing_license)) {
+      $license_id = $line_item_wrapper->cl_billing_license->raw();
+      if (!$licenses[$license_id]) {
+        $licenses[$license_id] = $line_item_wrapper->cl_billing_license->value();
+      }
+    }
+  }
+
+  return $licenses;
 }
 
 /**
@@ -252,7 +354,7 @@ function commerce_license_billing_close_cycle($item) {
  * @param $order
  *   The order to use as a base of the new recurring order.
  */
-function commerce_license_billing_create_recurring_order($order) {
+function commerce_license_billing_create_recurring_orders($order) {
   // Group licenses by billing cycle type.
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
   $billing_cycle_type_ids = array();
@@ -303,22 +405,50 @@ function commerce_license_billing_create_recurring_order($order) {
       $recurring_order_wrapper->save();
     }
     else {
-      // Save the order right away to get the order_id.
-      $recurring_order = commerce_order_new($order->uid, 'recurring_open', 'recurring');
-      commerce_order_save($recurring_order);
-
-      $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
-      $recurring_order_wrapper->commerce_customer_billing = $order_wrapper->commerce_customer_billing->value();
-      $recurring_order_wrapper->cl_billing_cycle = $billing_cycle;
-      // Generate a base line item for each license.
-      $line_items = array();
-      foreach ($licenses as $license) {
-        $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order->order_id);
-      }
-      $recurring_order_wrapper->commerce_line_items = $line_items;
-      $recurring_order_wrapper->save();
+      commerce_license_billing_create_recurring_order($order, $billing_cycle, $licenses);
     }
   }
+}
+
+/**
+ * Creates and saves a new recurring order.
+ *
+ * @param $previous_order
+ *   The previous order.
+ * @param $billing_cycle
+ *   The billing cycle for the new order.
+ * @param $licenses
+ *   An array of licenses added to the new order.
+ *
+ * @return
+ *   A saved recurring order.
+ */
+function commerce_license_billing_create_recurring_order($previous_order, $billing_cycle, $licenses) {
+  $previous_order_wrapper = entity_metadata_wrapper('commerce_order', $previous_order);
+  // Create a new order and save it immediately to get the order_id.
+  $recurring_order = commerce_order_new($previous_order->uid, 'recurring_open', 'recurring');
+  commerce_order_save($recurring_order);
+
+  $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+  $recurring_order_wrapper->commerce_customer_billing = $previous_order_wrapper->commerce_customer_billing->value();
+  $recurring_order_wrapper->cl_billing_cycle = $billing_cycle;
+  // Generate a base line item for each license.
+  // If this is the first recurring order, licenses of all statuses are taken,
+  // since they haven't been activated yet. However, if the previous order was
+  // also recurring, only active licenses are taken since the revoked / expired
+  // ones have already been charged for.
+  $active_only = ($previous_order->type == 'recurring');
+  $line_items = array();
+  foreach ($licenses as $license) {
+    if (!$active_only && $license->status != COMMERCE_LICENSE_ACTIVE) {
+      continue;
+    }
+    $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order->order_id);
+  }
+  $recurring_order_wrapper->commerce_line_items = $line_items;
+  $recurring_order_wrapper->save();
+
+  return $recurring_order;
 }
 
 /**
@@ -379,10 +509,11 @@ function commerce_license_billing_generate_base_line_item($license, $billing_cyc
  */
 function commerce_license_billing_commerce_order_load($orders) {
   $refreshed = &drupal_static(__FUNCTION__, array());
+  $recurring_statuses = array('recurring_open', 'recurring_pending');
 
   foreach ($orders as $order) {
     // Refresh only if this is a recurring order and it hasn't been refreshed.
-    if (!isset($refreshed[$order->order_id]) && $order->type == 'recurring') {
+    if (!isset($refreshed[$order->order_id]) && in_array($order->status, $recurring_statuses) {
       // Refresh the order and add its ID to the refreshed array.
       $refreshed[$order->order_id] = TRUE;
       commerce_license_billing_order_refresh($order);

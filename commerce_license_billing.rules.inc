@@ -41,8 +41,8 @@ function commerce_license_billing_rules_condition_info() {
  * Implements hook_rules_action_info().
  */
 function commerce_license_billing_rules_action_info() {
-  $actions['commerce_license_billing_create_recurring_order'] = array(
-    'label' => t('Create a recurring order'),
+  $actions['commerce_license_billing_create_recurring_orders'] = array(
+    'label' => t('Create recurring orders based on the initial order'),
     'parameter' => array(
       'commerce_order' => array(
         'type' => 'commerce_order',
@@ -51,7 +51,7 @@ function commerce_license_billing_rules_action_info() {
     ),
     'group' => t('Commerce License Billing'),
     'callbacks' => array(
-      'execute' => 'commerce_license_billing_create_recurring_order_action',
+      'execute' => 'commerce_license_billing_create_recurring_orders_action',
     ),
   );
   return $actions;
@@ -97,8 +97,8 @@ function commerce_license_billing_order_elligible_condition($order) {
 }
 
 /**
- * Rules action callback: create a recurring order.
+ * Rules action callback: create recurring orders based on the initial order.
  */
-function commerce_license_billing_create_recurring_order_action($order) {
-  commerce_license_billing_create_recurring_order($order);
+function commerce_license_billing_create_recurring_orders_action($order) {
+  commerce_license_billing_create_recurring_orders($order);
 }
