@@ -296,7 +296,7 @@ function commerce_license_billing_close_cycle($item) {
 
     // Open a new billing cycle just after the end of the previous one.
     $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
-    $next_billing_cycle = $billing_cycle_type->getBillingCycle($billing_cycle->end + 1);
+    $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle);
     // Create a new recurring order.
     commerce_license_billing_create_recurring_order($order, $next_billing_cycle, $licenses);
 
@@ -375,7 +375,7 @@ function commerce_license_billing_create_recurring_orders($order) {
   // Ensure there's a recurring order for each group of licenses.
   foreach ($grouped_licenses as $billing_cycle_type_id => $licenses) {
     $billing_cycle_type = $billing_cycle_types[$billing_cycle_type_id];
-    $billing_cycle = $billing_cycle_type->getBillingCycle();
+    $billing_cycle = $billing_cycle_type->getBillingCycle($order->uid);
 
     // Open the product history.
     foreach ($licenses as $license) {
@@ -482,7 +482,7 @@ function commerce_license_billing_generate_base_line_item($license, $billing_cyc
     // billing cycle. So if the just opened billing cycle is "February",
     // the line item needs to charge for March.
     $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
-    $next_billing_cycle = $billing_cycle_type->getBillingCycle($billing_cycle->end, FALSE);
+    $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
     $line_item_wrapper->cl_billing_start = $billing_cycle->start;
     $line_item_wrapper->cl_billing_end = $billing_cycle->end;
   }

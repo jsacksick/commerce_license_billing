@@ -8,18 +8,39 @@
 interface CommerceLicenseBillingCycleEngineInterface extends EntityBundlePluginProvideFieldsInterface {
 
   /**
-   * Returns a billing cycle entity with provided start time.
+   * Returns the user's billing cycle with the provided start time.
    *
    * If an existing billing cycle matches the expected start and end, it will
-   * be returned instead.
+   * be returned. Otherwise, a new one will be created.
    *
+   * @param $uid
+   *   The uid of the user.
    * @param $start
    *   The unix timestamp when the billing cycle needs to start.
+   * @param $save
+   *   Whether to save the created billing cycle entity.
+   *   Passing FALSE allows an unsaved billing cycle entity to be returned
+   *   for estimation purposes.
    *
    * @return
    *   A cl_billing_cycle entity.
    */
-  public function getBillingCycle($start = REQUEST_TIME);
+  public function getBillingCycle($uid, $start = REQUEST_TIME, $save = TRUE);
+
+  /**
+   * Returns the user's next billing cycle.
+   *
+   * @param $billing_cycle
+   *   The current billing cycle.
+   * @param $save
+   *   Whether to save the created billing cycle entity.
+   *   Passing FALSE allows an unsaved billing cycle entity to be returned
+   *   for estimation purposes.
+   *
+   * @return
+   *   A cl_billing_cycle entity.
+   */
+  public function getNextBillingCycle($billing_cycle, $save = TRUE);
 
   /**
    * Returns a label for the billing cycle with the provided start and end.

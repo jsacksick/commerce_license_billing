@@ -20,6 +20,13 @@ class CommerceLicenseBillingCycle extends Entity {
   public $type;
 
   /**
+   * The uid of the billing cycle owner.
+   *
+   * @var integer
+   */
+  public $uid;
+
+  /**
    * Whether the billing cycle is open or closed.
    *
    * @var boolean
