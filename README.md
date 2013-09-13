@@ -4,7 +4,7 @@ Commerce License Billing
 Commerce License Billing provides advanced (prepaid, postpaid, prorated, plan-based, metered)
 recurring billing for licenses.
 
-Dependencies: Commerce License, Bundleswitcher, Commerce Card on File.
+Dependencies: Commerce License, Commerce Card on File, Advanced queue.
 
 Getting started
 ---------------
@@ -17,6 +17,20 @@ will be free.
 depending on your billing cycle type settings), along with a matching recurring order.
 5. When the billing cycle expires, the recurring order will be closed and charged for
 using Commerce Card on File, and a new billing cycle & order will be opened.
+
+Relationship to Commerce License
+--------------------------------
+Any license type can be used for recurring billing without changes.
+A license is considered billable if its product has a billing cycle type
+selected.
+
+If the license type wants to have metered billing, it must implement the
+`CommerceLicenseBillingUsageInterface` interface.
+
+By default, licenses are revisionable, but changes to a license don't create
+new revisions. Commerce License Billing changes that logic for billable licenses,
+ensuring that a new revision is created for status or product_id changes
+(this is essential for later pricing and prorating).
 
 Prepaid billing
 ---------------
@@ -47,55 +61,32 @@ A prorated payment is a payment proportional to the duration of the usage.
 So, if the billing cycle is two weeks, but the plan was used for one week,
 only half of the plan's price will be set on the line item.
 
-The plan and usage records have start and end timestamps.
+The usage records have `start` and `end` timestamps.
+Plans are priced by examining license revisions, each of which has
+a `revision_created` and `revision_ended` timestamp, used the same way.
 
-If the end timestamp is missing, it is assumed that the record is still active / in progress,
-so the current timestamp is taken as the end instead in order to give a cost estimation.
+If the end timestamp is 0, it is assumed that the record is still active / in progress,
+so the end of the billing cycle is taken as the end instead, in order to give a cost estimation.
 The duration (end - start) is compared to the billing cycle duration, and the record is priced proportionally.
 
 Plan-based billing
 ------------------
 Each license has one plan at a given point of time, which is the referenced product.
 
-Different plans are represented by different products, all pointing to the
-same license type / billing cycle type / billing type.
-The module tracks plan changes in the cl_product_history table, that has a
-start and an end date for each license and product_id.
-So if the user switches $license->product_id from id: 10 ("Small plan") to
-id: 11 ("Large plan"), the cl_product_history table will look like this:
+Licenses are revisionable, and Commerce License Billing modifies the default
+behavior so that new revisions are always created for product_id (plan) and
+status changes. Each revision has a `revision_created` and `revision_ended` timestamp.
+The `revision_ended` timestamp is 0 for the current revision.
+The timestamps are used to prorate the price of each plan that was active
+during the billing cycle.
 
-<table>
-    <tr>
-        <td>license_id</td>
-        <td>product_id</td>
-        <td>start</td>
-        <td>end</td>
-    </tr>
-    <tr>
-        <td>1</td>
-        <td>10</td>
-        <td>1364772240</td>
-        <td>1365722640</td>
-    </tr>
-    <tr>
-        <td>1</td>
-        <td>11</td>
-        <td>1367272800</td>
-        <td>0</td>
-    </tr>
-</table>
-
-The first row was created automatically when the billing cycle was opened,
-and the start is the start of the billing cycle.
-
-The second row has no end value because the plan is still active.
-The start and end times are used for prorating plans during later billing
-(allowing you to charge the customer for both plans, proportionaly to the
-time they were used).
+Only revisions with status `COMMERCE_LICENSE_ACTIVE` are priced, so if a license
+was suspended for a week, that period won't be priced since that revision will
+be ignored.
 
 Metered (usage-based) billing
 -----------------------------
-If a license type implements the CommerceLicenseBillingUsageInterface interface
+If a license type implements the `CommerceLicenseBillingUsageInterface` interface
 and declares its usage groups, the module will allow usage to be
 registered and calculated for each usage group separately, and charge for it
 at the end of the billing cycle.
@@ -127,6 +118,12 @@ A usage group can also define `free_quantity`, the quantity provided for free
 with the license. Only usage exceeding this quantity will be charged for.
 For counters this means that the free quantity is subtracted from the total quantity.
 For gauges this means that the gauge values that equal free_quantity are ignored.
+
+The `free_quantity` value can be hardcoded, or taken from the license's product
+(making it plan-based, which is a common use case, with Plan A providing one quantity
+for free, and Plan B providing another quantity for free).
+The module makes sure to price the usage according to the plan that was active
+at the time.
 
 See:
 
