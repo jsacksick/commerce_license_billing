@@ -265,7 +265,7 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
   foreach ($licenses as $license) {
     if ($license instanceof CommerceLicenseBillingUsageInterface) {
       // Do gap checking to ensure usage has been reported for the entire cycle.
-      $usage = commerce_license_billing_usage_list($license);
+      $usage = commerce_license_billing_usage_list($license, $billing_cycle);
       $remaining_gap = ($billing_cycle->end - $billing_cycle->start);
       foreach ($usage as $usage_entry) {
         if ($usage_entry['start'] <= $billing_cycle->start) {
@@ -377,11 +377,6 @@ function commerce_license_billing_create_recurring_orders($order) {
   foreach ($grouped_licenses as $billing_cycle_type_id => $licenses) {
     $billing_cycle_type = $billing_cycle_types[$billing_cycle_type_id];
     $billing_cycle = $billing_cycle_type->getBillingCycle($order->uid);
-
-    // Open the product history.
-    foreach ($licenses as $license) {
-      commerce_license_billing_product_history_open($license, $license->product_id);
-    }
 
     // Check if there's an existing order attached to that billing cycle.
     $query = new EntityFieldQuery();
@@ -616,8 +611,9 @@ function commerce_license_billing_order_refresh($order) {
  *     when looking for an existing line item for the charge.
  */
 function commerce_license_billing_collect_charges($license, $billing_cycle) {
-  $history = commerce_license_billing_product_history_list($license);
+  $history = commerce_license_billing_plan_history_list($license, $billing_cycle);
   // Gather all products.
+  $product_ids = array();
   foreach ($history as $history_entry) {
     $product_ids[] = $history_entry['product_id'];
   }
@@ -814,81 +810,106 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
 }
 
 /**
- * Implements hook_commerce_license_update().
+ * Implements hook_commerce_license_presave().
  *
- * Maintains the license product history.
+ * Ensures that a new license revision is created on product or status changes.
  */
-function commerce_license_billing_commerce_license_update($license) {
-  $product = $license->wrapper->product->value();
-  // No billing cycle type selected, this license is not billable.
-  if (empty($product->cl_billing_cycle_type)) {
+function commerce_license_billing_commerce_license_presave($license) {
+  if (empty($license->original) || $license->status < COMMERCE_LICENSE_ACTIVE) {
+    // The license is new, or hasn't been activated yet.
     return;
   }
 
-  $status_changed = ($license->status > $license->original->status);
   $product_changed = ($license->product_id != $license->original->product_id);
-  if ($license->status == COMMERCE_LICENSE_REVOKED && $status_changed) {
-    // The license was just revoked.
-    commerce_license_billing_product_history_close($license, $license->product_id);
-  }
-  elseif ($license->status == COMMERCE_LICENSE_ACTIVE && $product_changed) {
-    // The license product has changed.
-    commerce_license_billing_product_history_close($license, $license->original->product_id);
-    commerce_license_billing_product_history_open($license, $license->product_id);
+  $status_changed = ($license->status != $license->original->status);
+  if ($product_changed || $status_changed) {
+    $license->is_new_revision = TRUE;
   }
 }
 
 /**
- * Creates an open license product history entry.
+ * Changes the license plan.
+ *
+ * @todo
+ * Allow the plan change to be queued until the end of the cycle, and do it
+ * by default for prepaid cycles.
  *
  * @param $license
  *   The license entity.
  * @param $product_id
- *   The product id.
+ *   The product_id of the new plan.
  */
-function commerce_license_billing_product_history_open($license, $product_id) {
-  db_insert('cl_product_history')
-    ->fields(array(
-      'license_id' => $license->license_id,
-      'product_id' => $product_id,
-      'start' => REQUEST_TIME,
-    ))
-    ->execute();
+function commerce_license_billing_change_plan($license, $product_id) {
+  $license->product_id = $product_id;
+  $license->save();
 }
 
 /**
- * Closes a license product history entry.
+ * Returns the license plan history for the given billing cycle.
  *
  * @param $license
  *   The license entity.
- * @param $product_id
- *   The product id.
- */
-function commerce_license_billing_product_history_close($license, $product_id) {
-  db_update('cl_product_history')
-    ->fields(array(
-      'end' => REQUEST_TIME,
-    ))
-    ->condition('license_id', $license->license_id)
-    ->condition('product_id', $product_id)
-    ->condition('end', 0)
-    ->execute();
-}
-
-/**
- * Returns all license product history entries.
- *
- * @param $license
- *   The license entity.
+ * @param $billing_cycle
+ *   The billing cycle entity.
  *
  * @return
- *   An array of history entries.
+ *   An array of history entries in the following format:
+ *   - product_id: The id of the product representing the plan.
+ *   - start: The start timestamp.
+ *   - end: The end timestamp.
  */
-function commerce_license_billing_product_history_list($license) {
-  $data = array(
-    ':license_id' => $license->license_id,
-  );
-  $history = db_query("SELECT * FROM {cl_product_history} WHERE license_id = :license_id", $data)->fetchAll(PDO::FETCH_ASSOC);
+function commerce_license_billing_plan_history_list($license, $billing_cycle) {
+  $history = &drupal_static(__FUNCTION__);
+  if (!isset($history)) {
+    // Fetch revisions that started or ended in this billing cycle.
+    $cycle_duration = array($billing_cycle->start, $billing_cycle->end);
+    $or = db_or();
+    $or->condition('revision_created', $cycle_duration, 'BETWEEN');
+    $or->condition('revision_ended', $cycle_duration, 'BETWEEN');
+
+    $query = db_select('commerce_license_revision', 'clr');
+    $query->addField('clr', 'product_id');
+    $query->addField('clr', 'status');
+    $query->addField('clr', 'revision_created', 'start');
+    $query->addField('clr', 'revision_ended', 'end');
+    $query->condition('license_id', $license->license_id);
+    $query->condition('status', COMMERCE_LICENSE_ACTIVE);
+    $query->condition($or);
+    $history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
+
+    // Merge any entries with the same product_id and status that are right
+    // next to each other (edge case when a revision wasn't created for a
+    // product_id or status change, but for another purpose).
+    $previous_index = NULL;
+    foreach ($history as $index => $history_entry) {
+      if (!isset($previous_index)) {
+        $previous_index = $index;
+        continue;
+      }
+
+      $previous_entry = $history[$previous_index];
+      $products_match = ($history_entry['product_id'] == $previous_entry['product_id']);
+      $statuses_match = ($history_entry['status'] == $previous_entry['status']);
+      $times_match = ($history_entry['start'] - $previous_entry['end'] === 1);
+      if ($products_match && $statuses_match && $times_match) {
+        $history[$previous_index]['end'] = $history_entry['end'];
+        unset($history[$index]);
+        continue;
+      }
+      $previous_index = $index;
+    }
+
+    // Adjust the start and end timestamps for the current billing cycle.
+    foreach ($history as &$history_entry) {
+      if ($history_entry['start'] < $billing_cycle->start) {
+        $history_entry['start'] = $billing_cycle->start;
+      }
+      if (empty($history_entry['end'])) {
+        $history_entry['end'] = $billing_cycle->end;
+      }
+    }
+  }
+
   return $history;
 }
 
