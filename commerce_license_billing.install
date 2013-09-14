@@ -101,43 +101,6 @@ function commerce_license_billing_schema() {
     ),
     'primary key' => array('billing_cycle_type_id'),
   );
-  // Tables for tracking plan and usage changes for later (prorated) billing.
-  $schema['cl_product_history'] = array(
-    'description' => 'The base table for tracking license plan (product) changes.',
-    'fields' => array(
-      'history_id' => array(
-        'description' => 'The primary key.',
-        'type' => 'serial',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-      ),
-      'license_id' => array(
-        'description' => 'The id of the license.',
-        'type' => 'int',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'product_id' => array(
-        'description' => 'The id of the product.',
-        'type' => 'int',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'start' => array(
-        'description' => 'The Unix timestamp when usage began.',
-        'type' => 'int',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'end' => array(
-        'description' => 'The Unix timestamp when usage ended.',
-        'type' => 'int',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-    ),
-    'primary key' => array('history_id'),
-  );
   $schema['cl_billing_usage'] = array(
     'description' => 'The base table for tracking license usage.',
     'fields' => array(
