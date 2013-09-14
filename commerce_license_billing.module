@@ -797,7 +797,7 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
       $estimation['charges'][] = array(
         'product' => $usage_product,
         'quantity' => $quantity,
-        'unit_price' => $usage_product_wrapper->commerce_price->value(),
+        'unit_price' => $price,
       );
     }
   }
