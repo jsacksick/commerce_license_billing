@@ -735,6 +735,85 @@ function commerce_license_billing_adjust_charges(&$charges, $billing_cycle) {
 }
 
 /**
+ * Estimate the cost of a license with the given plan and usage.
+ *
+ * @param $license_type
+ *   The license type.
+ * @param $product
+ *   The product representing the license plan.
+ * @param $usage
+ *  An array in the usage_group => quantity format.
+ *
+ * @return
+ *   An array with the following keys:
+ *   - billing_cycle: An array with the title, start, end keys.
+ *   - charges: An array of arrays with product, unit_price, quantity keys.
+ *   - total: The total price array (amount, currency_code, data).
+ */
+function commerce_license_billing_estimate_cost($license_type, $product, $usage = NULL) {
+  // Prepare commonly needed data.
+  $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+  $zero_price = array(
+    'amount' => 0,
+    'currency_code' => $product_wrapper->commerce_price->currency_code->value(),
+    'data' => array(),
+  );
+  // Construct a billing cycle.
+  $billing_cycle_type = $product_wrapper->cl_billing_cycle_type->value();
+  $billing_cycle = $billing_cycle_type->getBillingCycle($GLOBALS['user']->uid, REQUEST_TIME, FALSE);
+
+  $estimation = array(
+    'billing_cycle' => array(
+      'title' => $billing_cycle->label(),
+      'start' => $billing_cycle->start,
+      'end' => $billing_cycle->end,
+    ),
+  );
+  // Price the base product.
+  $estimation['charges'][] = array(
+    'product' => $product,
+    'quantity' => 1,
+    'unit_price' => $product_wrapper->commerce_price->value(),
+  );
+  // Price the usage.
+  $license = entity_create('commerce_license', array('type' => $license_type));
+  $license->product_id = $product->product_id;
+  $license->granted = $billing_cycle->start;
+  $license->expires = $billing_cycle->end;
+  if ($license instanceof CommerceLicenseBillingUsageInterface) {
+    $usage_groups = $license->usageGroups();
+    foreach ($usage as $group_name => $quantity) {
+      $usage_group = $usage_groups[$group_name];
+      $usage_product = commerce_product_load_by_sku($usage_group['product']);
+      $usage_product_wrapper = entity_metadata_wrapper('commerce_product', $usage_product);
+      if ($quantity <= $usage_group['free_quantity']) {
+        $price = $zero_price;
+      }
+      else {
+        $quantity -= $usage_group['free_quantity'];
+        $price = $usage_product_wrapper->commerce_price->value();
+      }
+
+      $estimation['charges'][] = array(
+        'product' => $usage_product,
+        'quantity' => $quantity,
+        'unit_price' => $usage_product_wrapper->commerce_price->value(),
+      );
+    }
+  }
+  // Calculate the total.
+  $estimation['total'] = $zero_price;
+  foreach ($estimation['charges'] as $charge) {
+    $estimation['total']['amount'] += ($charge['unit_price']['amount'] * $charge['quantity']);
+    $estimation['total']['data'] = commerce_price_components_combine($estimation['total'], $charge['unit_price']);
+  }
+  // Make sure the final amount has been rounded.
+  $estimation['total']['amount'] = round($estimation['total']['amount']);
+
+  return $estimation;
+}
+
+/**
  * Implements hook_commerce_license_update().
  *
  * Maintains the license product history.
