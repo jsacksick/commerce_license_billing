@@ -807,7 +807,6 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
   $estimation['total'] = $zero_price;
 
   foreach ($estimation['charges'] as $charge) {
-    // Create a line item to obtain a correct components array.
     $charge['total']['data'] = commerce_price_component_add($charge['total'], 'base_price', $charge['total'], TRUE, FALSE);
     $estimation['total']['amount'] += $charge['total']['amount'];
     $estimation['total']['data'] = commerce_price_components_combine($estimation['total'], $charge['total']);

@@ -46,7 +46,7 @@ function commerce_license_billing_default_rules_configuration() {
         { "commerce_license_billing_order_elligible" : { "commerce_order" : [ "commerce_order" ] } }
       ],
       "DO" : [
-        { "commerce_license_billing_create_recurring_order" : { "commerce_order" : [ "commerce_order" ] } }
+        { "commerce_license_billing_create_recurring_orders" : { "commerce_order" : [ "commerce_order" ] } }
       ]
     }
   }');
