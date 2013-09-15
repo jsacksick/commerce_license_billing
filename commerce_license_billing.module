@@ -1271,3 +1271,17 @@ function commerce_license_billing_configure_order_type() {
     field_create_instance($instance);
   }
 }
+
+/**
+ * Implements hook_theme().
+ */
+function commerce_license_billing_theme() {
+  return array(
+    'commerce_license_billing_estimate' => array(
+      'variables' => array(
+        'estimation' => NULL,
+      ),
+      'file' => 'theme/commerce_license_billing.theme.inc',
+    ),
+  );
+}
