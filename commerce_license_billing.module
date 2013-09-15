@@ -754,6 +754,7 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
     'currency_code' => $product_wrapper->commerce_price->currency_code->value(),
     'data' => array(),
   );
+  $zero_price['data'] = commerce_price_component_add($zero_price, 'base_price', $zero_price, TRUE, FALSE);
   // Construct a billing cycle.
   $billing_cycle_type = $product_wrapper->cl_billing_cycle_type->value();
   $billing_cycle = $billing_cycle_type->getBillingCycle($GLOBALS['user']->uid, REQUEST_TIME, FALSE);
@@ -770,13 +771,14 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
     'product' => $product,
     'quantity' => 1,
     'unit_price' => $product_wrapper->commerce_price->value(),
+    'total' => $product_wrapper->commerce_price->value(),
   );
   // Price the usage.
   $license = entity_create('commerce_license', array('type' => $license_type));
   $license->product_id = $product->product_id;
   $license->granted = $billing_cycle->start;
   $license->expires = $billing_cycle->end;
-  if ($license instanceof CommerceLicenseBillingUsageInterface) {
+  if ($license instanceof CommerceLicenseBillingUsageInterface && !empty($usage)) {
     $usage_groups = $license->usageGroups();
     foreach ($usage as $group_name => $quantity) {
       $usage_group = $usage_groups[$group_name];
@@ -794,14 +796,21 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
         'product' => $usage_product,
         'quantity' => $quantity,
         'unit_price' => $price,
+        'total' => array(
+          'amount' => $price['amount'] * $quantity,
+          'currency_code' => $price['currency_code'],
+        ),
       );
     }
   }
   // Calculate the total.
   $estimation['total'] = $zero_price;
+
   foreach ($estimation['charges'] as $charge) {
-    $estimation['total']['amount'] += ($charge['unit_price']['amount'] * $charge['quantity']);
-    $estimation['total']['data'] = commerce_price_components_combine($estimation['total'], $charge['unit_price']);
+    // Create a line item to obtain a correct components array.
+    $charge['total']['data'] = commerce_price_component_add($charge['total'], 'base_price', $charge['total'], TRUE, FALSE);
+    $estimation['total']['amount'] += $charge['total']['amount'];
+    $estimation['total']['data'] = commerce_price_components_combine($estimation['total'], $charge['total']);
   }
   // Make sure the final amount has been rounded.
   $estimation['total']['amount'] = round($estimation['total']['amount']);
