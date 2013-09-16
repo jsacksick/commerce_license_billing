@@ -436,7 +436,7 @@ function commerce_license_billing_create_recurring_order($previous_order, $billi
   $active_only = ($previous_order->type == 'recurring');
   $line_items = array();
   foreach ($licenses as $license) {
-    if (!$active_only && $license->status != COMMERCE_LICENSE_ACTIVE) {
+    if ($active_only && $license->status != COMMERCE_LICENSE_ACTIVE) {
       continue;
     }
     $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order->order_id);
