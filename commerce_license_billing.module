@@ -180,17 +180,17 @@ function commerce_license_billing_commerce_order_status_info() {
   $order_statuses = array();
   $order_statuses['recurring_open'] = array(
     'name' => 'recurring_open',
-    'title' => t('Recurring open'),
+    'title' => t('Recurring: Open'),
     'state' => 'recurring',
   );
-  $order_statuses['recurring_pending'] = array(
-    'name' => 'recurring_pending',
-    'title' => t('Recurring pending'),
+  $order_statuses['recurring_payment_pending'] = array(
+    'name' => 'recurring_payment_pending',
+    'title' => t('Recurring: Payment pending'),
     'state' => 'recurring',
   );
-  $order_statuses['recurring_complete'] = array(
-    'name' => 'recurring_complete',
-    'title' => t('Recurring complete'),
+  $order_statuses['recurring_usage_pending'] = array(
+    'name' => 'recurring_usage_pending',
+    'title' => t('Recurring: Usage pending'),
     'state' => 'recurring',
   );
   return $order_statuses;
@@ -288,7 +288,7 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
     $billing_cycle->start = 0;
     $billing_cycle->save();
     // Close the order.
-    $order->status = 'recurring_complete';
+    $order->status = 'recurring_payment_pending';
     commerce_order_save($order);
 
     // Open a new billing cycle just after the end of the previous one.
@@ -308,8 +308,8 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
     );
   }
   else {
-    if ($order->status != 'recurring_pending') {
-      $order->status = 'recurring_pending';
+    if ($order->status != 'recurring_usage_pending') {
+      $order->status = 'recurring_usage_pending';
       commerce_order_save($order);
     }
 
@@ -512,7 +512,7 @@ function commerce_license_billing_generate_base_line_item($license, $billing_cyc
  */
 function commerce_license_billing_commerce_order_load($orders) {
   $refreshed = &drupal_static(__FUNCTION__, array());
-  $recurring_statuses = array('recurring_open', 'recurring_pending');
+  $recurring_statuses = array('recurring_open', 'recurring_usage_pending');
 
   foreach ($orders as $order) {
     // Refresh only if this is a recurring order and it hasn't been refreshed.
