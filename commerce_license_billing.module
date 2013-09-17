@@ -290,14 +290,15 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
     // Close the order.
     $order->status = 'recurring_complete';
     commerce_order_save($order);
-    // Clean up usage that's now irrelevant.
-    foreach ($licenses as $license) {
-      commerce_license_billing_usage_clear($license);
-    }
 
     // Open a new billing cycle just after the end of the previous one.
     $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
     $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle);
+    // Renew the licenses and clean up usage that's now irrelevant.
+    foreach ($licenses as $license) {
+      $license->renew($next_billing_cycle->end);
+      commerce_license_billing_usage_clear($license);
+    }
     // Create a new recurring order.
     commerce_license_billing_create_recurring_order($order, $next_billing_cycle, $licenses);
 
