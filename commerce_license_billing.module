@@ -792,21 +792,24 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
       $usage_group = $usage_groups[$group_name];
       $usage_product = commerce_product_load_by_sku($usage_group['product']);
       if ($quantity <= $usage_group['free_quantity']) {
-        $price = $zero_price;
+        $unit_price = $total_price = $zero_price;
       }
       else {
         $quantity -= $usage_group['free_quantity'];
-        $price = commerce_license_billing_calculate_sell_price($usage_product, $quantity, $billing_cycle);
+        $unit_price = commerce_license_billing_calculate_sell_price($usage_product, $quantity, $billing_cycle);
+        $total_price = $unit_price;
+        // Multiply the amount and all price components by quantity.
+        $total_price['amount'] *= $quantity;
+        foreach ($total_price['data']['components'] as $key => &$component) {
+          $component['price']['amount'] *= $quantity;
+        }
       }
 
       $estimation['charges'][] = array(
         'product' => $usage_product,
         'quantity' => $quantity,
-        'unit_price' => $price,
-        'total' => array(
-          'amount' => $price['amount'] * $quantity,
-          'currency_code' => $price['currency_code'],
-        ),
+        'unit_price' => $unit_price,
+        'total' => $total_price,
       );
     }
   }
@@ -848,8 +851,13 @@ function commerce_license_billing_calculate_sell_price($product, $quantity, $bil
   commerce_product_line_item_populate($line_item, $product);
   // Pass the line item to Rules.
   rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
+  // Get the calculated unit price. If it was unset, provide a default.
+  $unit_price = $line_item_wrapper->commerce_unit_price->value();
+  if (empty($unit_price)) {
+    $unit_price = commerce_price_field_data_auto_creation();
+  }
 
-  return $line_item_wrapper->commerce_unit_price->value();
+  return $unit_price;
 }
 
 /**
