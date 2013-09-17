@@ -378,6 +378,12 @@ function commerce_license_billing_create_recurring_orders($order) {
   foreach ($grouped_licenses as $billing_cycle_type_id => $licenses) {
     $billing_cycle_type = $billing_cycle_types[$billing_cycle_type_id];
     $billing_cycle = $billing_cycle_type->getBillingCycle($order->uid);
+    // Sync the license timestamps with the billing cycle timestamps.
+    foreach ($licenses as $license) {
+      $license->granted = $billing_cycle->start;
+      $license->expires = $billing_cycle->end;
+      $license->save();
+    }
 
     // Check if there's an existing order attached to that billing cycle.
     $query = new EntityFieldQuery();
