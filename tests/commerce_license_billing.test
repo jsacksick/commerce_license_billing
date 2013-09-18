@@ -12,6 +12,12 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
 
   protected $profile = 'testing';
 
+  protected $billing_cycle_type = NULL;
+  protected $prepaid_product = NULL;
+  protected $prepaid_product_display = NULL;
+  protected $postpaid_product = NULL;
+  protected $postpaid_product_display = NULL;
+
   public static function getInfo() {
     return array(
       'name' => 'Commerce License Billing',
@@ -20,20 +26,207 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     );
   }
 
-  function setUp() {
-    parent::setUp(array('commerce_license_billing', 'commerce_license_billing_test'));
+  public function setUp() {
+    // Install all required modules, and clear the cache so that the required
+    // license & billing fields are created
+    $modules = parent::setUpHelper('ui');
+    $additional_modules = array('commerce_payment_example', 'commerce_license_billing', 'commerce_license_billing_test');
+    $modules = array_merge($modules, $additional_modules);
+    parent::setUp($modules);
+
+    // Enable licensing on the required product and line item types.
+    variable_set('commerce_license_product_types', array('product' => 'product'));
+    variable_set('commerce_license_line_item_types', array('product' => 'product'));
+
+    // Flush the caches to trigger the creation of the license & billing fields.
+    drupal_flush_all_caches();
+
+    $this->createDummyProductDisplayContentType();
+    $this->store_customer = $this->createStoreCustomer();
+    // Create a monthly async billing cycle type.
+    $billing_cycle_type = entity_create('cl_billing_cycle_type', array('engine' => 'periodic'));
+    $billing_cycle_type->name = 'Test';
+    $billing_cycle_type->title = 'test';
+    $billing_cycle_type->pce_async[LANGUAGE_NONE][0]['value'] = 1;
+    $billing_cycle_type->pce_period[LANGUAGE_NONE][0]['value'] = 'month';
+    $billing_cycle_type->save();
+    $this->billing_cycle_type = $billing_cycle_type;
+
+    // Create a prepaid product that holds the license.
+    $prepaid_product = commerce_product_new('product');
+    $prepaid_product->sku = 'PREPAID-LICENSE';
+    $prepaid_product->title = 'Prepaid license';
+    $prepaid_product->uid = 1;
+    $prepaid_product->commerce_price[LANGUAGE_NONE][0]['amount'] = 5000;
+    $prepaid_product->commerce_price[LANGUAGE_NONE][0]['currency_code'] = 'USD';
+    $prepaid_product->commerce_license_type[LANGUAGE_NONE][0]['value'] = 'billing_test';
+    $prepaid_product->commerce_license_duration[LANGUAGE_NONE][0]['value'] = 0;
+    $prepaid_product->cl_billing_cycle_type[LANGUAGE_NONE][0]['target_id'] = $billing_cycle_type->billing_cycle_type_id;
+    $prepaid_product->cl_billing_type[LANGUAGE_NONE][0]['value'] = 'prepaid';
+    commerce_product_save($prepaid_product);
+    $this->prepaid_product = $prepaid_product;
+
+    // Create a product display for the prepaid product.
+    $node = (object) array('type' => 'product_display');
+    node_object_prepare($node);
+    $node->uid = 1;
+    $node->title = 'Prepaid license';
+    $node->field_product[LANGUAGE_NONE][]['product_id'] = $prepaid_product->product_id;
+    node_save($node);
+    $this->prepaid_product_display = $node;
+
+    // Create a postpaid product that holds the license.
+    $postpaid_product = commerce_product_new('product');
+    $postpaid_product->sku = 'POSTPAID-LICENSE';
+    $postpaid_product->title = 'Postpaid license';
+    $postpaid_product->uid = 1;
+    $postpaid_product->commerce_price[LANGUAGE_NONE][0]['amount'] = 6000;
+    $postpaid_product->commerce_price[LANGUAGE_NONE][0]['currency_code'] = 'USD';
+    $postpaid_product->commerce_license_type[LANGUAGE_NONE][0]['value'] = 'billing_test';
+    $postpaid_product->commerce_license_duration[LANGUAGE_NONE][0]['value'] = 0;
+    $postpaid_product->cl_billing_cycle_type[LANGUAGE_NONE][0]['target_id'] = $billing_cycle_type->billing_cycle_type_id;
+    $postpaid_product->cl_billing_type[LANGUAGE_NONE][0]['value'] = 'postpaid';
+    commerce_product_save($postpaid_product);
+    $this->postpaid_product = $postpaid_product;
+
+    // Create a product display for the postpaid product.
+    $node = (object) array('type' => 'product_display');
+    node_object_prepare($node);
+    $node->uid = 1;
+    $node->title = 'Postpaid license';
+    $node->field_product[LANGUAGE_NONE][]['product_id'] = $postpaid_product->product_id;
+    node_save($node);
+    $this->postpaid_product_display = $node;
   }
 
   /**
-   * Test the creation of the necessary products.
+   * Tests the checkout process for prepaid and postpaid products.
+   *
+   * The process starts on the node page, and ends when checkout is complete,
+   * the billing cycle has been opened, and the recurring order created with the
+   * appropraite line items.
    */
-  public function testUsageProducts() {
-    $skus = array('BILLING-TEST-ENV', 'BILLING-TEST-BANDWIDTH');
+  public function testCheckout() {
+    $this->drupalLogin($this->store_customer);
 
-    foreach ($skus as $sku) {
-      $product = commerce_product_load_by_sku($sku);
-      $this->assertTrue(!empty($product), t('The product with the sku @sku has been correctly created', array('@sku' => $sku)));
+    // Add the prepaid and postpaid products to cart.
+    $this->drupalPost('node/' . $this->prepaid_product_display->nid, array(), t('Add to cart'));
+    $this->drupalPost('node/' . $this->postpaid_product_display->nid, array(), t('Add to cart'));
+    $this->drupalGet($this->getCommerceUrl('cart'));
+    $this->assertText($this->prepaid_product->title, 'The prepaid license product is present in the cart view');
+    $this->assertText($this->postpaid_product->title, 'The postpaid license product is present in the cart view');
+    $this->assertText('$0.00', 'The postpaid license product is correctly priced at $0.00');
+
+    // Complete checkout
+    $this->completeCheckout();
+
+    // Confirm that the billing cycle has been created.
+    $has_billing_cycle = FALSE;
+    $billing_cycles = entity_load('cl_billing_cycle');
+    $billing_cycles = (array) $billing_cycles;
+    $billing_cycle = reset($billing_cycles);
+    if ($billing_cycle && $billing_cycle->type == $this->billing_cycle_type->name) {
+      $has_billing_cycle = TRUE;
+    }
+    $this->assertTrue($has_billing_cycle, 'A new billing cycle has been opened');
+    if (!$has_billing_cycle) {
+      // If there's no billing cycle, there's no point in further testing.
+      return;
+    }
+
+    // Confirm that the recurring order for the billing cycle has been created.
+    $has_recurring_order = FALSE;
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'commerce_order')
+      ->entityCondition('bundle', 'recurring')
+      ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle->billing_cycle_id);
+    $result = $query->execute();
+    if ($result) {
+      $order_id = key($result['commerce_order']);
+      $has_recurring_order = TRUE;
+    }
+    $this->assertTrue($has_recurring_order, 'A recurring order matching the billing cycle has been created');
+    if (!$has_recurring_order) {
+      // If there's no recurring order, there's no point in further testing.
+      return;
+    }
+
+    // Confirm the line items on the recurring order.
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'commerce_line_item')
+      ->entityCondition('bundle', 'recurring')
+      ->propertyCondition('order_id', $order_id);
+    $result = $query->execute();
+    if ($result) {
+      $line_item_ids = array_keys($result['commerce_line_item']);
+      $line_items = commerce_line_item_load_multiple($line_item_ids);
+      // Key the line items by product_id.
+      foreach ($line_items as $line_item) {
+        $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+        $product_id = $line_item_wrapper->commerce_product->raw();
+        $line_items_by_product[$product_id] = $line_item;
+      }
+
+      // Try to find the line item for the prepaid product.
+      if (!empty($line_items_by_product[$this->prepaid_product->product_id])) {
+        $line_item = $line_items_by_product[$this->prepaid_product->product_id];
+        $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+        $this->assertTrue(TRUE, 'Found the recurring line item for the prepaid product.');
+
+        $next_billing_cycle = $this->billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
+        $start = $line_item_wrapper->cl_billing_start->value();
+        $end = $line_item_wrapper->cl_billing_end->value();
+        $this->assertEqual($start, $next_billing_cycle->start, 'The recurring line item for the prepaid product has the correct start date');
+        $this->assertEqual($end , $next_billing_cycle->end, 'The recurring line item for the prepaid product has the correct end date');
+
+        $price_amount = $line_item_wrapper->commerce_unit_price->amount->value();
+        $expected_price_amount = $this->prepaid_product->commerce_price[LANGUAGE_NONE][0]['amount'];
+        $this->assertEqual($price_amount, $expected_price_amount, 'The recurring line item for the prepaid product has the correct price');
+      }
+      else {
+        $this->assertTrue(FALSE, 'Found the recurring line item for the prepaid product.');
+      }
+
+      // Try to find the line item for the postpaid product.
+      if (!empty($line_items_by_product[$this->postpaid_product->product_id])) {
+        $line_item = $line_items_by_product[$this->postpaid_product->product_id];
+        $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+        $this->assertTrue(TRUE, 'Found the recurring line item for the postpaid product.');
+
+        $start = $line_item_wrapper->cl_billing_start->value();
+        $end = $line_item_wrapper->cl_billing_end->value();
+        $this->assertEqual($start, $billing_cycle->start, 'The recurring line item for the postpaid product has the correct start date');
+        $this->assertEqual($end , $billing_cycle->end, 'The recurring line item for the postpaid product has the correct end date');
+
+        $price_amount = $line_item_wrapper->commerce_unit_price->amount->value();
+        $expected_price_amount = $this->postpaid_product->commerce_price[LANGUAGE_NONE][0]['amount'];
+        $this->assertEqual($price_amount, $expected_price_amount, 'The recurring line item for the postpaid product has the correct price');
+      }
+      else {
+        $this->assertTrue(FALSE, 'Found the recurring line item for the postpaid product.');
+      }
+    }
+    else {
+      $this->assertTrue(FALSE, 'The recurring order has two valid recurring line items');
     }
   }
 
+  /**
+   * Completes checkout.
+   */
+  protected function completeCheckout() {
+    $this->drupalGet($this->getCommerceUrl('checkout'));
+    $address_info = $this->generateAddressInformation();
+    $info = array(
+      'customer_profile_billing[commerce_customer_address][und][0][name_line]' => $address_info['name_line'],
+      'customer_profile_billing[commerce_customer_address][und][0][thoroughfare]' => $address_info['thoroughfare'],
+      'customer_profile_billing[commerce_customer_address][und][0][locality]' => $address_info['locality'],
+    );
+    $this->drupalPost(NULL, $info, t('Continue to next step'));
+    $this->drupalPost(NULL, array(), t('Continue to next step'));
+    $this->drupalPost(NULL, array('commerce_payment[payment_details][name]' => 'Example payment method'), t('Continue to next step'));
+    $this->assertTitle(t('Checkout complete') . ' | Drupal', t('Checkout has been completed'));
+  }
 }
