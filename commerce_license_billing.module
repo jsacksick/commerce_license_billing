@@ -888,6 +888,11 @@ function commerce_license_billing_commerce_license_presave($license) {
  *   The product_id of the new plan.
  */
 function commerce_license_billing_change_plan($license, $product_id) {
+  if ($license->wrapper->product->cl_billing_type->value() == 'prepaid') {
+    // We don't support changing plans for prepaid products for now.
+    return;
+  }
+
   $license->product_id = $product_id;
   $license->save();
 }
