@@ -51,7 +51,8 @@ interface CommerceLicenseBillingUsageInterface {
    *     'type' => 'gauge',
    *     'product' => 'BILLING-TEST-ENV',
    *     'immediate' => TRUE,
-   *     'free_quantity' => 0,
+   *     // Take the number of free environments from the plan.
+   *     'free_quantity' => $this->wrapper->product->free_environments->value(),
    *   ),
    * );
    * </code>
