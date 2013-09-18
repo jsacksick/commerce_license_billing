@@ -480,8 +480,8 @@ function commerce_license_billing_generate_base_line_item($license, $billing_cyc
     // the line item needs to charge for March.
     $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
     $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
-    $line_item_wrapper->cl_billing_start = $billing_cycle->start;
-    $line_item_wrapper->cl_billing_end = $billing_cycle->end;
+    $line_item_wrapper->cl_billing_start = $next_billing_cycle->start;
+    $line_item_wrapper->cl_billing_end = $next_billing_cycle->end;
   }
   elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
     // In case of postpaid, the line item always charges for the current
@@ -612,28 +612,48 @@ function commerce_license_billing_order_refresh($order) {
  *     when looking for an existing line item for the charge.
  */
 function commerce_license_billing_collect_charges($license, $billing_cycle) {
-  $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle);
-  // Gather all products.
-  $product_ids = array();
-  foreach ($plan_history as $history_record) {
-    $product_ids[] = $history_record['product_id'];
-  }
-  $products = commerce_product_load_multiple($product_ids);
   $charges = array();
-
-  // Charge for the plans (current one, and any previous ones).
-  foreach ($plan_history as $history_record) {
-    $product = $products[$history_record['product_id']];
-    $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+  // Charge the plan.
+  // In case of prepaid, the plan charge is always for the next billing cycle.
+  // In case of postpaid, all plan changes in the current month are charged.
+  $product_wrapper = $license->wrapper->product;
+  if ($product_wrapper->cl_billing_type->value() == 'prepaid') {
+    $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
+    $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
+    $line_item_wrapper->cl_billing_start = $billing_cycle->start;
+    $line_item_wrapper->cl_billing_end = $billing_cycle->end;
 
     $charges[] = array(
       'quantity' => 1,
-      'commerce_product' => $product,
+      'commerce_product' => $product_wrapper->value(),
       'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-      'cl_billing_start' => $history_record['start'],
-      'cl_billing_end' => $history_record['end'],
+      'cl_billing_start' => $next_billing_cycle->start,
+      'cl_billing_end' => $next_billing_cycle->end,
       'match' => array('commerce_product'),
     );
+  }
+  elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
+    $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle);
+    // Gather all products.
+    $product_ids = array();
+    foreach ($plan_history as $history_record) {
+      $product_ids[] = $history_record['product_id'];
+    }
+    $products = commerce_product_load_multiple($product_ids);
+
+    foreach ($plan_history as $history_record) {
+      $product = $products[$history_record['product_id']];
+      $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+
+      $charges[] = array(
+        'quantity' => 1,
+        'commerce_product' => $product,
+        'commerce_unit_price' => $product_wrapper->commerce_price->value(),
+        'cl_billing_start' => $history_record['start'],
+        'cl_billing_end' => $history_record['end'],
+        'match' => array('commerce_product'),
+      );
+    }
   }
 
   // Charge for usage, if the license type supports it.
