@@ -9,28 +9,6 @@
  * Implements hook_services_resources().
  */
 function commerce_license_billing_services_resources() {
-  $resources["licenses"]['update'] = array(
-    'file' => array('type' => 'inc', 'module' => 'commerce_license_billing', 'name' => 'commerce_license_billing.resources'),
-    'callback' => '_commerce_license_billing_resource_update',
-    'args' => array(
-      array(
-        'name' => 'license_id',
-        'optional' => FALSE,
-        'source' => array('path' => 0),
-        'type' => 'int',
-        'description' => 'The license id.',
-      ),
-      array(
-        'name' => 'data',
-        'type' => 'struct',
-        'description' => 'The data array, it must contain the new product_id.',
-        'source' => 'data',
-        'optional' => FALSE,
-      ),
-    ),
-    'access arguments' => array('access content'),
-    'access arguments append' => FALSE,
-  );
   $resources["licenses"]['delete'] = array(
     'file' => array('type' => 'inc', 'module' => 'commerce_license_billing', 'name' => 'commerce_license_billing.resources'),
     'callback' => '_commerce_license_billing_resource_delete',
