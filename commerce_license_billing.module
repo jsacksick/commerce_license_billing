@@ -620,8 +620,6 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
   if ($product_wrapper->cl_billing_type->value() == 'prepaid') {
     $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
     $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
-    $line_item_wrapper->cl_billing_start = $billing_cycle->start;
-    $line_item_wrapper->cl_billing_end = $billing_cycle->end;
 
     $charges[] = array(
       'quantity' => 1,
