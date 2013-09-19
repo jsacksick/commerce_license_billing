@@ -16,6 +16,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   protected $prepaid_product = NULL;
   protected $prepaid_product_display = NULL;
   protected $postpaid_product = NULL;
+  protected $alternative_postpaid_product = NULL;
   protected $postpaid_product_display = NULL;
 
   public static function getInfo() {
@@ -53,50 +54,47 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $this->billing_cycle_type = $billing_cycle_type;
 
     // Create a prepaid product that holds the license.
-    $prepaid_product = commerce_product_new('product');
-    $prepaid_product->sku = 'PREPAID-LICENSE';
-    $prepaid_product->title = 'Prepaid license';
-    $prepaid_product->uid = 1;
-    $prepaid_product->commerce_price[LANGUAGE_NONE][0]['amount'] = 5000;
-    $prepaid_product->commerce_price[LANGUAGE_NONE][0]['currency_code'] = 'USD';
-    $prepaid_product->commerce_license_type[LANGUAGE_NONE][0]['value'] = 'billing_test';
-    $prepaid_product->commerce_license_duration[LANGUAGE_NONE][0]['value'] = 0;
-    $prepaid_product->cl_billing_cycle_type[LANGUAGE_NONE][0]['target_id'] = $billing_cycle_type->billing_cycle_type_id;
-    $prepaid_product->cl_billing_type[LANGUAGE_NONE][0]['value'] = 'prepaid';
-    commerce_product_save($prepaid_product);
-    $this->prepaid_product = $prepaid_product;
-
+    $this->prepaid_product = $this->createProduct('PREPAID-LICENSE', 50, 'prepaid');
     // Create a product display for the prepaid product.
     $node = (object) array('type' => 'product_display');
     node_object_prepare($node);
     $node->uid = 1;
     $node->title = 'Prepaid license';
-    $node->field_product[LANGUAGE_NONE][]['product_id'] = $prepaid_product->product_id;
+    $node->field_product[LANGUAGE_NONE][]['product_id'] = $this->prepaid_product->product_id;
     node_save($node);
     $this->prepaid_product_display = $node;
 
     // Create a postpaid product that holds the license.
-    $postpaid_product = commerce_product_new('product');
-    $postpaid_product->sku = 'POSTPAID-LICENSE';
-    $postpaid_product->title = 'Postpaid license';
-    $postpaid_product->uid = 1;
-    $postpaid_product->commerce_price[LANGUAGE_NONE][0]['amount'] = 6000;
-    $postpaid_product->commerce_price[LANGUAGE_NONE][0]['currency_code'] = 'USD';
-    $postpaid_product->commerce_license_type[LANGUAGE_NONE][0]['value'] = 'billing_test';
-    $postpaid_product->commerce_license_duration[LANGUAGE_NONE][0]['value'] = 0;
-    $postpaid_product->cl_billing_cycle_type[LANGUAGE_NONE][0]['target_id'] = $billing_cycle_type->billing_cycle_type_id;
-    $postpaid_product->cl_billing_type[LANGUAGE_NONE][0]['value'] = 'postpaid';
-    commerce_product_save($postpaid_product);
-    $this->postpaid_product = $postpaid_product;
-
+    $this->postpaid_product = $this->createProduct('POSTPAID-LICENSE-PLAN-A', 60, 'postpaid');
     // Create a product display for the postpaid product.
     $node = (object) array('type' => 'product_display');
     node_object_prepare($node);
     $node->uid = 1;
     $node->title = 'Postpaid license';
-    $node->field_product[LANGUAGE_NONE][]['product_id'] = $postpaid_product->product_id;
+    $node->field_product[LANGUAGE_NONE][]['product_id'] = $this->postpaid_product->product_id;
     node_save($node);
     $this->postpaid_product_display = $node;
+
+    // Create another postpaid product that serves as an alternative plan.
+    $this->another_postpaid_product = $this->createProduct('POSTPAID-LICENSE-PLAN-B', 70, 'postpaid');
+
+    $this->start = time();
+  }
+
+  /**
+   * Main test function. Runs all of the subtests.
+   *
+   * Needed because SimpleTest reinstalls Drupal between test runs, but we
+   * always need the results of the first checkout.
+   */
+  public function testRecurring() {
+    $checkout_success = $this->checkoutTest();
+    if ($checkout_success !== FALSE) {
+      $this->planTest();
+      $this->usageTest();
+     // $this->testOrderRefresh();
+     // $this->testBillingCycleClosing();
+    }
   }
 
   /**
@@ -106,7 +104,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
    * the billing cycle has been opened, and the recurring order created with the
    * appropraite line items.
    */
-  public function testCheckout() {
+  protected function checkoutTest() {
     $this->drupalLogin($this->store_customer);
 
     // Add the prepaid and postpaid products to cart.
@@ -126,12 +124,13 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $billing_cycles = (array) $billing_cycles;
     $billing_cycle = reset($billing_cycles);
     if ($billing_cycle && $billing_cycle->type == $this->billing_cycle_type->name) {
+      $this->billing_cycle = $billing_cycle;
       $has_billing_cycle = TRUE;
     }
     $this->assertTrue($has_billing_cycle, 'A new billing cycle has been opened');
     if (!$has_billing_cycle) {
       // If there's no billing cycle, there's no point in further testing.
-      return;
+      return FALSE;
     }
 
     // Confirm that the recurring order for the billing cycle has been created.
@@ -149,7 +148,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $this->assertTrue($has_recurring_order, 'A recurring order matching the billing cycle has been created');
     if (!$has_recurring_order) {
       // If there's no recurring order, there's no point in further testing.
-      return;
+      return FALSE;
     }
 
     // Confirm the line items on the recurring order.
@@ -207,10 +206,152 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       else {
         $this->assertTrue(FALSE, 'Found the recurring line item for the postpaid product.');
       }
+
+      // The billing cycle was created using the REQUEST_TIME of the test
+      // environment request, not the REQUEST_TIME of the test runner request.
+      // This means that $billing_cycle->start is now larger than REQUEST_TIME.
+      // Set it to the correct REQUEST_TIME so that it's predictable for further
+      // tests (of usage, plan changes, etc).
+      $billing_cycle->start = REQUEST_TIME;
+      $billing_cycle->save();
+      // The start of the postpaid line item needs to match as well.
+      if (!empty($line_items_by_product[$this->postpaid_product->product_id])) {
+        $postpaid_line_item = $line_items_by_product[$this->postpaid_product->product_id];
+        $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $postpaid_line_item);
+        $line_item_wrapper->cl_billing_start = $billing_cycle->start;
+        $line_item_wrapper->save();
+      }
     }
     else {
       $this->assertTrue(FALSE, 'The recurring order has two valid recurring line items');
     }
+
+    return TRUE;
+  }
+
+  /**
+   * Tests plan changes.
+   */
+  public function planTest() {
+    $license = $this->getLicense('postpaid');
+
+    // Switch from plan A to plan B.
+    $plan_b_product_id = $this->another_postpaid_product->product_id;
+    commerce_license_billing_change_plan($license, $plan_b_product_id);
+    $plan_history = commerce_license_billing_plan_history_list($license, $this->billing_cycle);
+    if (count($plan_history) < 2) {
+      // The second record wasn't created, something went wrong, stop here.
+      $this->assertTrue(FALSE, t('The second plan history record was successfuly opened'));
+      return;
+    }
+
+    $second_record_valid = FALSE;
+    $product_ids_match = ($plan_history[1]['product_id'] == $plan_b_product_id);
+    $start_times_match = ($plan_history[1]['start'] == REQUEST_TIME);
+    $end_times_match = ($plan_history[1]['end'] == $this->billing_cycle->end);
+    if ($product_ids_match && $start_times_match && $end_times_match) {
+      $second_record_valid = TRUE;
+    }
+    $this->assertTrue($second_record_valid, 'The second plan history record is valid');
+    $first_record_closed = ($plan_history[0]['end'] + 1 == $plan_history[1]['start']);
+    $this->assertTrue($first_record_closed, 'The first plan history record was successfuly closed');
+  }
+
+  /**
+   * Tests usage tracking.
+   */
+  protected function usageTest() {
+    $license = $this->getLicense('postpaid');
+
+    // Open usage for environments.
+    commerce_license_billing_usage_add($license, 'environments', 1);
+    commerce_license_billing_usage_add($license, 'environments', 3);
+    // Confirm the correct current usage.
+    $current_usage = commerce_license_billing_current_usage($license, 'environments');
+    $this->assertEqual($current_usage, 3, 'Current environment usage matches last reported quantity');
+
+    // Add counter usage.
+    $start = $this->billing_cycle->start;
+    $end = $this->billing_cycle->end - 86401;
+    $start2 = $end + 1;
+    $end2 = $this->billing_cycle->end;
+    commerce_license_billing_usage_add($license, 'bandwidth', 2048, $start, $end);
+    commerce_license_billing_usage_add($license, 'bandwidth', 1024, $start2, $end2);
+    // Confirm the correct current usage.
+    $current_usage = commerce_license_billing_current_usage($license, 'bandwidth');
+    $this->assertEqual($current_usage, 3072, 'Current bandwidth usage matches total reported quantity');
+  }
+
+  /**
+   * Tests the recurring order refresh and its pricing logic.
+   */
+  protected function orderRefreshTest() {
+
+  }
+
+  /**
+   * Tests the closing of a billing cycle.
+   */
+  protected function billingCycleClosingTest() {
+
+  }
+
+  /**
+   * Get the license for the provided billing type.
+   *
+   * @param $billing_type
+   *   The billing type (prepaid or postpaid).
+   *
+   * @return
+   *   The loaded license entity, or FALSE if not found.
+   */
+  public function getLicense($billing_type) {
+    $product_ids = array();
+    if ($billing_type == 'prepaid') {
+      $product_ids[] = $this->prepaid_product->product_id;
+    }
+    else {
+      $product_ids[] = $this->postpaid_product->product_id;
+      $product_ids[] = $this->another_postpaid_product->product_id;
+    }
+
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'commerce_license')
+      ->propertyCondition('product_id', $product_ids);
+    $result = $query->execute();
+    $license_id = key($result['commerce_license']);
+
+    return entity_load_single('commerce_license', $license_id);
+  }
+
+  /**
+   * Create and save a recurring product.
+   *
+   * @param $sku
+   *   The sku of the new product.
+   * @param $price
+   *   The price of the new product.
+   * @param $billing_type
+   *   The billing type (prepaid or postpaid).
+   *
+   * @return
+   *   The newly saved product.
+   */
+  protected function createProduct($sku, $price, $billing_type) {
+    $product = commerce_product_new('product');
+    $product->sku = $sku;
+    $product->title = str_replace('-', ' ', ucfirst(strtolower($sku)));
+    $product->uid = 1;
+    $product->commerce_price[LANGUAGE_NONE][0]['amount'] = $price * 100;
+    $product->commerce_price[LANGUAGE_NONE][0]['currency_code'] = 'USD';
+    $product->commerce_license_type[LANGUAGE_NONE][0]['value'] = 'billing_test';
+    $product->commerce_license_duration[LANGUAGE_NONE][0]['value'] = 0;
+    $product->cl_billing_cycle_type[LANGUAGE_NONE][0]['target_id'] = $this->billing_cycle_type->billing_cycle_type_id;
+    $product->cl_billing_type[LANGUAGE_NONE][0]['value'] = $billing_type;
+    commerce_product_save($product);
+
+    return $product;
   }
 
   /**
@@ -224,9 +365,9 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       'customer_profile_billing[commerce_customer_address][und][0][thoroughfare]' => $address_info['thoroughfare'],
       'customer_profile_billing[commerce_customer_address][und][0][locality]' => $address_info['locality'],
     );
-    $this->drupalPost(NULL, $info, t('Continue to next step'));
-    $this->drupalPost(NULL, array(), t('Continue to next step'));
-    $this->drupalPost(NULL, array('commerce_payment[payment_details][name]' => 'Example payment method'), t('Continue to next step'));
-    $this->assertTitle(t('Checkout complete') . ' | Drupal', t('Checkout has been completed'));
+    $this->drupalPost(NULL, $info, 'Continue to next step');
+    $this->drupalPost(NULL, array(), 'Continue to next step');
+    $this->drupalPost(NULL, array('commerce_payment[payment_details][name]' => 'Example payment method'), 'Continue to next step');
+    $this->assertTitle(t('Checkout complete') . ' | Drupal', 'Checkout has been completed');
   }
 }
