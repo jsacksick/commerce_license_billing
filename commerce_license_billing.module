@@ -1133,6 +1133,7 @@ function commerce_license_billing_usage_history_list($license, $billing_cycle) {
  *   An array of usage records.
  */
 function commerce_license_billing_chargeable_usage_history_list($license, $billing_cycle) {
+  return array();
   // Start from the full usage history.
   $usage_history = commerce_license_billing_usage_history_list($license, $billing_cycle);
   // Map usage history to plan history, so that each usage history record
