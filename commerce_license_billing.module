@@ -649,7 +649,7 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
         'commerce_unit_price' => $product_wrapper->commerce_price->value(),
         'cl_billing_start' => $history_record['start'],
         'cl_billing_end' => $history_record['end'],
-        'match' => array('commerce_product'),
+        'match' => array('commerce_product', 'cl_billing_start'),
       );
     }
   }
