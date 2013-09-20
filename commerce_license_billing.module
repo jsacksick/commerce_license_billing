@@ -1004,6 +1004,19 @@ function commerce_license_billing_usage_add($license, $group, $quantity, $start 
     $start = REQUEST_TIME;
   }
 
+  // If a gauge just changed, close the previous usage record.
+  if ($usage_group['type'] == 'gauge' && !empty($usage_group['immediate'])) {
+    $previous_end = $start - 1;
+    db_update('cl_billing_usage')
+      ->fields(array(
+        'end' => $previous_end,
+      ))
+      ->condition('license_id', $license->license_id)
+      ->condition('usage_group', $group)
+      ->condition('end', 0)
+      ->execute();
+  }
+
   db_insert('cl_billing_usage')
     ->fields(array(
       'license_id' => $license->license_id,
