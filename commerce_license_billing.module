@@ -894,7 +894,9 @@ function commerce_license_billing_change_plan($license, $product_id) {
   // Change the plan, and trigger a synchronization.
   $license->product_id = $product_id;
   $license->save();
-  commerce_license_enqueue_sync($license);
+  if ($license instanceof CommerceLicenseSynchronizableInterface) {
+    commerce_license_enqueue_sync($license);
+  }
 }
 
 /**
