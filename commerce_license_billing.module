@@ -659,6 +659,7 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
     $usage_groups = $license->usageGroups();
     $usage_history = commerce_license_billing_chargeable_usage_history_list($license, $billing_cycle);
     foreach ($usage_history as $usage_record) {
+      $group_name = $usage_record['usage_group'];
       $product = commerce_product_load_by_sku($usage_groups[$group_name]['product']);
       $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
@@ -1158,7 +1159,7 @@ function commerce_license_billing_chargeable_usage_history_list($license, $billi
   // Create an array of usage group names, used to weigh the charges.
   $usage_groups = $license->usageGroups();
   $usage_group_names = array_keys($usage_groups);
-  $usage_group_weights = array_reverse($usage_group_names);
+  $usage_group_weights = array_flip($usage_group_names);
 
   // Get the free quantities provided by each license revision.
   // Start with the free usage given by the current revision.
