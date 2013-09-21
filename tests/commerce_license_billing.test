@@ -439,16 +439,16 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       'product_id' => $env_product->product_id,
       'unit_price' => '125',
       'quantity' => 3,
-      'start' => $plan_durations[3][0],
-      'end' => $this->billing_cycle->end,
+      'start' => $this->fourth_usage_start,
+      'end' => $plan_durations[1][1],
     );
     $expected_line_items[] = array(
       'title' => 'environments usage product',
       'product_id' => $env_product->product_id,
       'unit_price' => '125',
       'quantity' => 3,
-      'start' => $this->fourth_usage_start,
-      'end' => $plan_durations[1][1],
+      'start' => $plan_durations[3][0],
+      'end' => $this->billing_cycle->end,
     );
     $expected_line_items = array_values($expected_line_items);
 

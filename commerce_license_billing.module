@@ -1232,13 +1232,8 @@ function commerce_license_billing_chargeable_usage_history_list($license, $billi
     }
   }
 
-  // Sort the usage records so that they appear in the same order in which
-  // the groups are defined in $license->usageGroups().
-  foreach ($usage_history as $index => $usage_record) {
-    $group_name = $usage_record['usage_group'];
-    $usage_history[$index]['weight'] = $usage_group_weights[$group_name];
-  }
-  uasort($usage_history, 'drupal_sort_weight');
+  // Sort usage records by start ASC.
+  uasort($usage_history, 'commerce_license_billing_sort_usage');
 
   return $usage_history;
 }
@@ -1320,6 +1315,16 @@ function commerce_license_billing_map_usage_to_plan_history($usage_history, $pla
   }
 
   return $mapped_usage;
+}
+
+/**
+ * Sorts an array of usage records by their start date, ascending.
+ */
+function commerce_license_billing_sort_usage($a, $b) {
+  if ($a['start'] == $b['start']) {
+    return 0;
+  }
+  return ($a['start'] < $b['start']) ? -1 : 1;
 }
 
 /**
