@@ -251,7 +251,7 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
   $query = new EntityFieldQuery;
   $query
     ->entityCondition('entity_type', 'commerce_order')
-    ->propertyCondition('status', array('recurring_open'))
+    ->propertyCondition('status', array('recurring_open', 'recurring_usage_pending'))
     ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle_id);
   $result = $query->execute();
   if (!$result) {
@@ -270,11 +270,12 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
       $usage = commerce_license_billing_usage_history_list($license, $billing_cycle);
       $remaining_gap = ($billing_cycle->end - $billing_cycle->start);
       foreach ($usage as $usage_record) {
-        $remaining_gap -= ($usage_record['end'] - $usage_record['start']);
+        $remaining_gap -= ($usage_record['end'] - $usage_record['start'] + 1);
       }
 
       if ($remaining_gap > 0) {
         $can_close = FALSE;
+        break;
       }
     }
   }
