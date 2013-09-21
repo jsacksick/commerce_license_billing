@@ -72,7 +72,15 @@ class CommerceLicenseBillingCycleTypeTest extends CommerceLicenseBillingCycleTyp
    *   A cl_billing_cycle entity.
    */
   public function getNextBillingCycle($billing_cycle, $save = TRUE) {
-    return $this->getBillingCycle($billing_cycle->uid, $billing_cycle->end + 1, $save);
+    $next_billing_cycle = entity_create('cl_billing_cycle', array('type' => $this->name));
+    $next_billing_cycle->uid = $billing_cycle->uid;
+    $next_billing_cycle->start = $billing_cycle->end + 1;
+    $next_billing_cycle->end = $next_billing_cycle->start + 2592000 - 1;
+    $next_billing_cycle->status = 1;
+    if ($save) {
+      $next_billing_cycle->save();
+    }
+    return $next_billing_cycle;
   }
 
   /**
