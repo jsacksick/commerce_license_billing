@@ -1206,12 +1206,14 @@ function commerce_license_billing_chargeable_usage_history_list($license, $billi
       }
     }
 
-    $usage_history[] = array(
-      'usage_group' => $group_name,
-      'quantity' => $total,
-      'start' => $billing_cycle->start,
-      'end' => $billing_cycle->end,
-    );
+    if ($total > 0) {
+      $usage_history[] = array(
+        'usage_group' => $group_name,
+        'quantity' => $total,
+        'start' => $billing_cycle->start,
+        'end' => $billing_cycle->end,
+      );
+    }
   }
 
   // Sort the usage records so that they appear in the same order in which
