@@ -13,6 +13,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   protected $profile = 'testing';
 
   protected $billing_cycle_type = NULL;
+  protected $billing_cycle = NULL;
   protected $prepaid_product = NULL;
   protected $prepaid_product_display = NULL;
   protected $postpaid_product = NULL;
