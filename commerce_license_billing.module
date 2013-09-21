@@ -279,7 +279,7 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
 
   if ($can_close) {
     // Close the billing cycle.
-    $billing_cycle->start = 0;
+    $billing_cycle->status = 0;
     $billing_cycle->save();
     // Close the order.
     $order->status = 'recurring_payment_pending';
