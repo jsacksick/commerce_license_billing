@@ -37,7 +37,14 @@ class CommerceLicenseBillingCycleTypeTest extends CommerceLicenseBillingCycleTyp
     $query
       ->entityCondition('entity_type', 'cl_billing_cycle')
       ->entityCondition('bundle', $this->name)
+      ->propertyCondition('status', 1)
       ->propertyCondition('uid', $uid);
+    if ($start != REQUEST_TIME) {
+      // In case of a custom start, make sure to match the exact billing cycle.
+      // Ensures that new orders get the previous billing cycle created at the
+      // start of testing, while getNextBillingCycle returns the expected result.
+      $query->propertyCondition('start', $start);
+    }
     $result = $query->execute();
     if ($result) {
       $billing_cycle_id = key($result['cl_billing_cycle']);
@@ -72,15 +79,7 @@ class CommerceLicenseBillingCycleTypeTest extends CommerceLicenseBillingCycleTyp
    *   A cl_billing_cycle entity.
    */
   public function getNextBillingCycle($billing_cycle, $save = TRUE) {
-    $next_billing_cycle = entity_create('cl_billing_cycle', array('type' => $this->name));
-    $next_billing_cycle->uid = $billing_cycle->uid;
-    $next_billing_cycle->start = $billing_cycle->end + 1;
-    $next_billing_cycle->end = $next_billing_cycle->start + 2592000 - 1;
-    $next_billing_cycle->status = 1;
-    if ($save) {
-      $next_billing_cycle->save();
-    }
-    return $next_billing_cycle;
+    return $this->getBillingCycle($billing_cycle->uid, $billing_cycle->end + 1, $save);
   }
 
   /**
