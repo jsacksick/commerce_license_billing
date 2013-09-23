@@ -766,8 +766,9 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, $
     $order_id = key($result['commerce_order']);
   }
   else {
-    $cart_order = commerce_cart_order_load($uid);
-    $order_id = $cart_order->order_id;
+    if ($cart_order = commerce_cart_order_load($uid)) {
+      $order_id = $cart_order->order_id;
+    }
   }
 
   $estimation = array(
