@@ -4,7 +4,7 @@ Commerce License Billing
 Commerce License Billing provides advanced (prepaid, postpaid, prorated, plan-based, metered)
 recurring billing for licenses.
 
-Dependencies: Commerce License, Commerce Card on File, Advanced queue.
+Dependencies: Bundleswitcher, Commerce License, Advanced queue.
 
 Getting started
 ---------------
@@ -131,7 +131,7 @@ See:
 - `commerce_license_billing_usage_add()`
 - `commerce_license_billing_usage_clear()`
 - `commerce_license_billing_current_usage()`
-- `commerce_license_billing_usage_list()`
+- `commerce_license_billing_usage_history_list()`
 
 Recurring order refresh
 -----------------------

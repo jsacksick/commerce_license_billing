@@ -638,7 +638,6 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
    */
   protected function assertLineItems($order, $expected_line_items) {
     $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
-
     foreach ($expected_line_items as $index => $expected_line_item) {
       $match = FALSE;
       if (isset($order_wrapper->commerce_line_items[$index])) {

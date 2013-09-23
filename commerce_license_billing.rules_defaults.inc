@@ -37,8 +37,8 @@ function commerce_license_billing_default_rules_configuration() {
       ]
     }
   }');
-  $items['commerce_license_billing_create_recurring_order'] = entity_import('rules_config', '{ "commerce_license_billing_create_recurring_order" : {
-      "LABEL" : "Create a recurring order",
+  $items['commerce_license_billing_create_recurring_orders'] = entity_import('rules_config', '{ "commerce_license_billing_create_recurring_orders" : {
+      "LABEL" : "Create recurring orders based on the initial order",
       "PLUGIN" : "reaction rule",
       "WEIGHT" : "10",
       "TAGS" : [ "Commerce License Billing" ],
