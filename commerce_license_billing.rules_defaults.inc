@@ -59,6 +59,11 @@ function commerce_license_billing_default_rules_configuration() {
       "REQUIRES" : [ "rules", "commerce_payment", "commerce_cardonfile", "entity" ],
       "ON" : [ "commerce_order_update" ],
       "IF" : [
+        { "NOT data_is" : {
+            "data" : [ "commerce-order:status" ],
+            "value" : [ "commerce-order-unchanged:status" ]
+          }
+        },
         { "data_is" : {
             "data" : [ "commerce-order:status" ],
             "value" : "recurring_payment_pending"
