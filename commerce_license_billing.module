@@ -284,15 +284,6 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
     // Close the billing cycle.
     $billing_cycle->status = 0;
     $billing_cycle->save();
-    // Notify usage groups.
-    foreach ($licenses as $license) {
-      if ($license instanceof CommerceLicenseBillingUsageInterface) {
-        foreach (array_keys($license->usageGroups()) as $group_name) {
-          $usage_group = commerce_license_billing_usage_group($license, $group_name);
-          $usage_group->onBillingCycleClose($billing_cycle);
-        }
-      }
-    }
     // Close the order.
     $order->status = 'recurring_payment_pending';
     commerce_order_save($order);
@@ -305,15 +296,6 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
     foreach ($licenses as $license) {
       $license->renew($next_billing_cycle->end);
       $license_ids[] = $license->license_id;
-    }
-    // Notify usage groups.
-    foreach ($licenses as $license) {
-      if ($license instanceof CommerceLicenseBillingUsageInterface) {
-        foreach (array_keys($license->usageGroups()) as $group_name) {
-          $usage_group = commerce_license_billing_usage_group($license, $group_name);
-          $usage_group->onBillingCycleOpen($new_billing_cycle);
-        }
-      }
     }
     // Clear all closed usage, it's now irrelevant.
     commerce_license_billing_usage_clear($license_ids);
@@ -402,15 +384,6 @@ function commerce_license_billing_create_recurring_orders($order) {
       $license->expires = $billing_cycle->end;
       $license->expires_automatically = FALSE;
       $license->save();
-    }
-    // Notify usage groups.
-    foreach ($licenses as $license) {
-      if ($license instanceof CommerceLicenseBillingUsageInterface) {
-        foreach (array_keys($license->usageGroups()) as $group_name) {
-          $usage_group = commerce_license_billing_usage_group($license, $group_name);
-          $usage_group->onBillingCycleOpen($billing_cycle, TRUE);
-        }
-      }
     }
 
     // Check if there's an existing order attached to that billing cycle.

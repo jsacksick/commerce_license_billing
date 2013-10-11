@@ -54,28 +54,10 @@ interface CommerceLicenseBillingUsageGroupInterface {
   public function isComplete(CommerceLicenseBillingCycle $billingCycle);
 
   /**
-   * Reacts on the opening of a billing cycle.
-   *
-   * @param $billingCycle
-   *   The newly opened billing cycle.
-   * @param $first
-   *   Boolean indicating whether this is the first billing cycle for the
-   *   current license.
-   */
-  public function onBillingCycleOpen(CommerceLicenseBillingCycle $billingCycle, $first = FALSE);
-
-  /**
-   * Reacts on the closing of a billing cycle.
-   *
-   * @param $billingCycle
-   *   The just closed billing cycle.
-   */
-  public function onBillingCycleClose(CommerceLicenseBillingCycle $billingCycle);
-
-  /**
    * Reacts on license revision changes.
    *
-   * A new revision is created when the license status or plan change.
+   * A new revision is created when the license status or plan change,
+   * both of might require matching changes in usage.
    *
    * This event has access to the previous license in $this->license->original.
    * Key data:
@@ -169,16 +151,6 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
 
     return $is_complete;
   }
-
-  /**
-   * Implements CommerceLicenseBillingUsageGroupInterface::onBillingCycleOpen().
-   */
-  public function onBillingCycleOpen(CommerceLicenseBillingCycle $billingCycle, $first = FALSE) {}
-
-  /**
-   * Implements CommerceLicenseBillingUsageGroupInterface::onBillingCycleClose().
-   */
-  public function onBillingCycleClose(CommerceLicenseBillingCycle $billingCycle) {}
 
   /**
    * Implements CommerceLicenseBillingUsageGroupInterface::onRevisionChange().

@@ -60,16 +60,6 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
   }
 
   /**
-   * Implements CommerceLicenseBillingUsageGroupInterface::onBillingCycleOpen().
-   */
-  public function onBillingCycleOpen(CommerceLicenseBillingCycle $billingCycle, $first = FALSE) {
-    // Open initial usage.
-    if ($first && !empty($this->groupInfo['initial_quantity'])) {
-      $this->addUsage($this->license->revision_id, $this->groupInfo['initial_quantity'], REQUEST_TIME);
-    }
-  }
-
-  /**
    * Implements CommerceLicenseBillingUsageGroupInterface::onRevisionChange().
    */
   public function onRevisionChange() {
