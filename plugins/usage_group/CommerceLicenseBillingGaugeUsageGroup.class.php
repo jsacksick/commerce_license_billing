@@ -63,30 +63,41 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
    * Implements CommerceLicenseBillingUsageGroupInterface::onRevisionChange().
    */
   public function onRevisionChange() {
-    // Get the quantities of any open usage.
-    $data = array(
-      'group_name' => $this->groupName,
-      'revision_id' => $this->license->original->revision_id,
-    );
-    $query = db_query('SELECT quantity FROM {cl_billing_usage}
-                          WHERE usage_group = :group_name
-                            AND revision_id = :revision_id
-                              AND end = 0');
-    $previous_usage = $query->execute()->fetchAssoc();
+    $previous_status = $this->license->original->status;
+    $new_status = $this->license->status;
+    // The license was activated for the first time. Register initial usage.
+    if ($previous_status < COMMERCE_LICENSE_ACTIVE && $new_status == COMMERCE_LICENSE_ACTIVE) {
+      if (!empty($this->groupInfo['initial_quantity'])) {
+        $this->addUsage($this->license->revision_id, $this->groupInfo['initial_quantity'], REQUEST_TIME);
+      }
+    }
+    // A new revision was created, and the previous revision was active.
+    elseif ($previous_status == COMMERCE_LICENSE_ACTIVE) {
+      // Get the quantities of any open usage.
+      $data = array(
+        'group_name' => $this->groupName,
+        'revision_id' => $this->license->original->revision_id,
+      );
+      $query = db_query('SELECT quantity FROM {cl_billing_usage}
+                            WHERE usage_group = :group_name
+                              AND revision_id = :revision_id
+                                AND end = 0');
+      $previous_usage = $query->execute()->fetchAssoc();
 
-    // Close the open usage for the previous revision (plan).
-    db_update('cl_billing_usage')
-      ->fields(array(
-        'end' => REQUEST_TIME,
-      ))
-      ->condition('revision_id', $this->license->original->revision_id)
-      ->condition('end', '0')
-      ->execute();
+      // Close the open usage for the previous revision (plan).
+      db_update('cl_billing_usage')
+        ->fields(array(
+          'end' => REQUEST_TIME,
+        ))
+        ->condition('revision_id', $this->license->original->revision_id)
+        ->condition('end', '0')
+        ->execute();
 
-    // If the license is still active, reopen the usage.
-    if ($this->license->status == COMMERCE_LICENSE_ACTIVE) {
-      foreach ($previous_usage as $quantity) {
-        $this->addUsage($this->license->revision_id, $quantity, REQUEST_TIME);
+      // If the license is still active, reopen the usage.
+      if ($new_status == COMMERCE_LICENSE_ACTIVE) {
+        foreach ($previous_usage as $quantity) {
+          $this->addUsage($this->license->revision_id, $quantity, REQUEST_TIME);
+        }
       }
     }
   }
