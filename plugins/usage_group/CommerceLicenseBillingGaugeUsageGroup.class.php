@@ -76,14 +76,14 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     elseif ($previous_status == COMMERCE_LICENSE_ACTIVE) {
       // Get the quantities of any open usage.
       $data = array(
-        'group_name' => $this->groupName,
-        'revision_id' => $this->license->original->revision_id,
+        ':group_name' => $this->groupName,
+        ':revision_id' => $this->license->original->revision_id,
       );
       $query = db_query('SELECT quantity FROM {cl_billing_usage}
                             WHERE usage_group = :group_name
                               AND revision_id = :revision_id
-                                AND end = 0');
-      $previous_usage = $query->execute()->fetchAssoc();
+                                AND end = 0', $data);
+      $previous_usage = $query->fetchAssoc();
 
       // Close the open usage for the previous revision (plan).
       db_update('cl_billing_usage')

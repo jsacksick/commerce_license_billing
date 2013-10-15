@@ -262,7 +262,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     // Confirm that the first usage was correctly closed.
     $usage_history = commerce_license_billing_usage_history_list($postpaid_license, $this->billing_cycle);
     $usage_history = $usage_history['environments'];
-    $first_record_closed = ($usage_history[0]['end'] + 1 == $usage_history[1]['start']);
+    $first_record_closed = ($usage_history[0]['end'] + 1 == $usage_history[2]['start']);
     $this->assertTrue($first_record_closed, 'The first environment usage history record was successfuly closed');
     // Confirm the correct current usage.
     $current_usage = $environments->currentUsage();
