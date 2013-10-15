@@ -254,9 +254,10 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $current_usage = $bandwidth->currentUsage();
     $this->assertEqual($current_usage, 3072, 'Current bandwidth usage matches total reported quantity');
 
-    // Open usage for environments.
+    // Test environment usage.
     $environments = commerce_license_billing_usage_group($postpaid_license, 'environments');
-    $environments->addUsage($plan_history[0]['revision_id'], 1, $first_usage_start, $first_usage_end);
+    $initial_usage = ($environments->currentUsage() === 1);
+    $this->assertTrue($initial_usage, 'The initial environment usage was successfuly opened.');
     $environments->addUsage($plan_history[1]['revision_id'], 3, $second_usage_start);
     // Confirm that the first usage was correctly closed.
     $usage_history = commerce_license_billing_usage_history_list($postpaid_license, $this->billing_cycle);
