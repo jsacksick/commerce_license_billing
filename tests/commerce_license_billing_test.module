@@ -19,6 +19,6 @@ function commerce_license_billing_test_ctools_plugin_directory($owner, $plugin_t
  */
 function commerce_license_billing_test_commerce_license_billing_initial_usage($license, $group_name) {
   if ($group_name == 'environments') {
-    return 1;
+    return 2;
   }
 }
