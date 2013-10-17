@@ -33,7 +33,7 @@ function hook_commerce_license_billing_initial_usage($license, $group_name) {
       ->fieldCondition('commerce_license', 'target_id', $license->license_id);
     $result = $query->execute();
     if ($result) {
-      $line_item_id = current($result['commerce_line_item']);
+      $line_item_id = key($result['commerce_line_item']);
       $line_item = commerce_line_item_load($line_item_id);
       $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
       return $line_item_wrapper->field_user_environments->value();
