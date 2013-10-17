@@ -481,7 +481,6 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $environments->addUsage($postpaid_license->revision_id, 3, $this->plan_durations[3][0]);
 
     // Retrigger the close, reload the order and re-examine it.
-    drupal_static_reset('commerce_license_billing_usage_history_list');
     entity_get_controller('commerce_order')->resetCache();
     commerce_license_billing_cycle_expiration_queue_process($item);
 

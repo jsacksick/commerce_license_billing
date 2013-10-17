@@ -108,6 +108,7 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
    * Implements CommerceLicenseBillingUsageGroupInterface::addUsage().
    */
   public function addUsage($revisionId, $quantity, $start, $end) {
+    drupal_static_reset('commerce_license_billing_usage_history_list');
     db_insert('cl_billing_usage')
       ->fields(array(
         'license_id' => $this->license->license_id,
