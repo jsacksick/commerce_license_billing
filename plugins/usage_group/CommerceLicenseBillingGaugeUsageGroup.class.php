@@ -96,7 +96,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
         ->condition('end', '0')
         ->execute();
 
-      // Clear the static cache of usage records.
+      // Reset the usage history static cache.
       drupal_static_reset('commerce_license_billing_usage_history_list');
 
       // If the license is still active, reopen the usage.
